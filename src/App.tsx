@@ -27,17 +27,13 @@ import {
   Check,
   PenLine,
   FileText,
-  Cloud,
-  CloudUpload,
-  CloudDownload,
-  LogOut,
-  RefreshCw,
-  ExternalLink,
+  Archive,
+  HardDrive,
   Loader2,
   Eye,
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
-import { exportEstimate, generateEstimateExcelBlob } from "@/lib/export-estimate";
+import { exportEstimate } from "@/lib/export-estimate";
 import {
   computeTotals,
   fmt,
@@ -47,18 +43,6 @@ import {
   type Section,
 } from "@/lib/estimate-utils";
 import { exportElementToPdf } from "@/lib/export-pdf";
-import {
-  initAuth,
-  googleSignIn,
-  logout,
-  getAccessToken,
-  listDriveEstimates,
-  uploadEstimateToDrive,
-  downloadDriveFile,
-  deleteDriveFile,
-  type DriveFileItem,
-} from "@/lib/google-drive";
-import type { User } from "firebase/auth";
 
 type Item = {
   id: number;
@@ -128,7 +112,8 @@ export default function App() {
   const [mounted, setMounted] = useState(false);
   const [showProjects, setShowProjects] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
-  const [showDriveModal, setShowDriveModal] = useState(false);
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [restoreMode, setRestoreMode] = useState<"merge" | "replace">("merge");
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
@@ -166,79 +151,12 @@ export default function App() {
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const backupImportRef = useRef<HTMLInputElement>(null);
   const printableAreaRef = useRef<HTMLDivElement>(null);
-
-  // Google Auth & Drive state
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [authToken, setAuthToken] = useState<string | null>(null);
-  const [isSigningIn, setIsSigningIn] = useState(false);
-  const [driveFiles, setDriveFiles] = useState<DriveFileItem[]>([]);
-  const [isLoadingDrive, setIsLoadingDrive] = useState(false);
-  const [isUploadingToDrive, setIsUploadingToDrive] = useState(false);
-
-  // Initialize auth listener
-  useEffect(() => {
-    const unsubscribe = initAuth(
-      (user, token) => {
-        setAuthUser(user);
-        setAuthToken(token);
-      },
-      () => {
-        setAuthUser(null);
-        setAuthToken(null);
-      },
-    );
-    return () => unsubscribe();
-  }, []);
-
-  // Fetch Drive files when modal is opened and user is authenticated
-  useEffect(() => {
-    if (showDriveModal && authToken) {
-      refreshDriveFiles(authToken);
-    }
-  }, [showDriveModal, authToken]);
-
-  const refreshDriveFiles = async (token: string) => {
-    setIsLoadingDrive(true);
-    try {
-      const files = await listDriveEstimates(token);
-      setDriveFiles(files);
-    } catch (err) {
-      console.error(err);
-      toast.error("فشل في تحميل ملفات Google Drive");
-    } finally {
-      setIsLoadingDrive(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setIsSigningIn(true);
-    try {
-      const result = await googleSignIn();
-      if (result) {
-        setAuthUser(result.user);
-        setAuthToken(result.accessToken);
-        toast.success(`مرحباً ${result.user.displayName || "بك"}! تم الاتصال بـ Google Drive`);
-      }
-    } catch (err: any) {
-      console.error(err);
-      toast.error("فشل تسجيل الدخول باستخدام حساب Google");
-    } finally {
-      setIsSigningIn(false);
-    }
-  };
-
-  const handleGoogleLogout = async () => {
-    await logout();
-    setAuthUser(null);
-    setAuthToken(null);
-    setDriveFiles([]);
-    toast.info("تم تسجيل الخروج");
-  };
 
   useEffect(() => {
     setMounted(true);
-    fetch("/data/items.json")
+    fetch(`${import.meta.env.BASE_URL}data/items.json`)
       .then((r) => r.json())
       .then((d: Item[]) => setItems(d))
       .catch(() => toast.error("فشل تحميل قاعدة البيانات"));
@@ -450,17 +368,76 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const importJson = (f: File | null) => {
+  const exportAllBackup = () => {
+    const payload = {
+      type: "gea-workspace-backup",
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      activeId,
+      projects,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `نسخة-احتياطية-كل-المقايسات-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`تم حفظ نسخة احتياطية تشمل ${projects.length} مقايسة`);
+  };
+
+  const importJson = (f: File | null, mode: "merge" | "replace" = "merge") => {
     if (!f) return;
     f.text().then((txt) => {
       try {
         const d = JSON.parse(txt);
+
+        // Full workspace backup bundle
+        if (d.type === "gea-workspace-backup" && Array.isArray(d.projects)) {
+          const validProjects: Project[] = d.projects
+            .filter((item: any) => item && Array.isArray(item.estimate))
+            .map((item: any, idx: number) =>
+              newProject({
+                ...item,
+                id: mode === "replace" && item.id ? String(item.id) : `p${Date.now()}${idx}`,
+              }),
+            );
+
+          if (!validProjects.length) throw new Error("Empty backup");
+
+          if (mode === "replace") {
+            requestConfirm(
+              "استبدال جميع المقايسات",
+              `سيتم استبدال المقايسات الحالية بـ ${validProjects.length} مقايسة من ملف النسخة الاحتياطية. هل تريد المتابعة؟`,
+              () => {
+                setProjects(validProjects);
+                const nextActive = validProjects.find((p) => p.id === d.activeId)?.id || validProjects[0].id;
+                setActiveId(nextActive);
+                setShowBackupModal(false);
+                toast.success(`تمت استعادة ${validProjects.length} مقايسة بنجاح`);
+              },
+              "استبدال الكل",
+              true,
+            );
+          } else {
+            setProjects((l) => [...validProjects, ...l]);
+            setActiveId(validProjects[0].id);
+            setShowBackupModal(false);
+            toast.success(`تم دمج ${validProjects.length} مقايسة إلى قائمتك بنجاح`);
+          }
+          return;
+        }
+
+        // Single estimate JSON
         const src = d.project ?? d;
         if (!Array.isArray(src.estimate)) throw new Error();
         const p = newProject({ ...src });
         p.id = `p${Date.now()}`;
         setProjects((l) => [p, ...l]);
         setActiveId(p.id);
+        setShowBackupModal(false);
         toast.success("تم استيراد المقايسة");
       } catch {
         toast.error("الملف غير صالح");
@@ -587,126 +564,17 @@ export default function App() {
     }
   };
 
-  // ---- Google Drive Operations ----
-  const saveToDrive = async (format: "json" | "xlsx" | "pdf") => {
-    let token = authToken;
-    if (!token) {
-      token = await getAccessToken();
-    }
-    if (!token) {
-      setShowDriveModal(true);
-      return toast.info("يرجى تسجيل الدخول إلى Google أولاً");
-    }
-
-    if (!estimate.length) {
-      return toast.error("لا توجد بنود لحفظها — أضف بنوداً أولاً");
-    }
-
-    setIsUploadingToDrive(true);
-    const toastId = toast.loading("جارٍ رفع الملف إلى Google Drive...");
-
+  const storageStats = useMemo(() => {
+    const totalItems = projects.reduce((sum, p) => sum + p.estimate.length, 0);
+    let sizeKb = 0;
     try {
-      const title = project.projectName || "مشروع";
-      const dateStr = new Date().toISOString().slice(0, 10);
-
-      if (format === "json") {
-        const content = JSON.stringify(
-          { type: "gea-estimate", version: 2, project },
-          null,
-          2,
-        );
-        const fileName = `مقايسة-${title}-${dateStr}.json`;
-        await uploadEstimateToDrive(token, fileName, content, "application/json");
-        toast.success(`تم حفظ نسخة المقايسة على Google Drive: ${fileName}`, { id: toastId });
-      } else if (format === "xlsx") {
-        const blob = await generateEstimateExcelBlob(estimate, {
-          orgName: project.orgName,
-          projectTitle: project.projectName,
-          governorate: project.governorate,
-          refNumber: project.refNumber,
-          discountPercent: project.discountPercent,
-          logoDataUrl: project.logoDataUrl || undefined,
-        });
-        const fileName = `مقايسة-${title}-${dateStr}.xlsx`;
-        await uploadEstimateToDrive(
-          token,
-          fileName,
-          blob,
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        );
-        toast.success(`تم حفظ جدول Excel على Google Drive: ${fileName}`, { id: toastId });
-      } else if (format === "pdf") {
-        const element = printableAreaRef.current;
-        if (!element) throw new Error("تعذر تجهيز مستند PDF");
-        const fileName = `مقايسة-${title}-${dateStr}.pdf`;
-        const { blob } = await exportElementToPdf(element, fileName);
-        await uploadEstimateToDrive(token, fileName, blob, "application/pdf");
-        toast.success(`تم حفظ مستند PDF على Google Drive: ${fileName}`, { id: toastId });
-      }
-
-      await refreshDriveFiles(token);
-    } catch (e: any) {
-      console.error(e);
-      toast.error(`فشل الرفع إلى Google Drive: ${e.message || "خطأ غير معروف"}`, { id: toastId });
-    } finally {
-      setIsUploadingToDrive(false);
+      const bytes = new Blob([JSON.stringify({ projects, activeId })]).size;
+      sizeKb = Math.round((bytes / 1024) * 10) / 10;
+    } catch {
+      sizeKb = 0;
     }
-  };
-
-  const loadFromDrive = async (file: DriveFileItem) => {
-    let token = authToken;
-    if (!token) token = await getAccessToken();
-    if (!token) return;
-
-    requestConfirm(
-      "استيراد مقايسة من Google Drive",
-      `هل تريد استيراد المقايسة "${file.name}" من Google Drive وفتحها كمشروع جديد؟`,
-      async () => {
-        try {
-          const text = await downloadDriveFile(token!, file.id);
-          const data = JSON.parse(text);
-          const src = data.project ?? data;
-          if (!Array.isArray(src.estimate)) {
-            throw new Error("تنسيق بيانات المقايسة غير صحيح");
-          }
-          const p = newProject({ ...src });
-          p.id = `p${Date.now()}`;
-          setProjects((l) => [p, ...l]);
-          setActiveId(p.id);
-          setShowDriveModal(false);
-          toast.success(`تم استيراد "${p.projectName || file.name}" من Google Drive`);
-        } catch (err: any) {
-          console.error(err);
-          toast.error(`فشل استيراد الملف: ${err.message || "الملف غير صالح"}`);
-        }
-      },
-      "استيراد",
-      false,
-    );
-  };
-
-  const handleDeleteDriveFile = async (file: DriveFileItem) => {
-    let token = authToken;
-    if (!token) token = await getAccessToken();
-    if (!token) return;
-
-    requestConfirm(
-      "حذف ملف من Google Drive",
-      `هل أنت متأكد من حذف الملف "${file.name}" نهائياً من Google Drive؟ لا يمكن التراجع عن هذا الإجراء.`,
-      async () => {
-        try {
-          await deleteDriveFile(token!, file.id);
-          toast.success(`تم حذف "${file.name}" من Google Drive`);
-          setDriveFiles((prev) => prev.filter((f) => f.id !== file.id));
-        } catch (err: any) {
-          console.error(err);
-          toast.error("فشل حذف الملف من Google Drive");
-        }
-      },
-      "حذف من Drive",
-      true,
-    );
-  };
+    return { projectCount: projects.length, totalItems, sizeKb };
+  }, [projects, activeId]);
 
   const field = (label: string, key: keyof Project, placeholder: string) => (
     <div>
@@ -793,17 +661,14 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Google Drive Status & Trigger */}
+            {/* Local Backup & Archive Trigger */}
             <Button
-              variant={authToken ? "secondary" : "outline"}
-              className="relative flex items-center gap-2 border-emerald-600/30 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-              onClick={() => setShowDriveModal(true)}
+              variant="outline"
+              className="whitespace-nowrap shrink-0 flex items-center gap-2"
+              onClick={() => setShowBackupModal(true)}
             >
-              <Cloud className="w-4 h-4 text-emerald-600" />
-              <span>Google Drive</span>
-              {authToken && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              )}
+              <Archive className="w-4 h-4" />
+              <span>النسخ الاحتياطي</span>
             </Button>
 
             <Button
@@ -1207,249 +1072,154 @@ export default function App() {
         </div>
       </div>
 
-      {/* Google Drive Modal */}
-      {showDriveModal && (
+      {/* Local Backup & Archive Modal */}
+      {showBackupModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl bg-card border-2 shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+          <Card className="w-full max-w-2xl bg-card border shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
             <button
-              onClick={() => setShowDriveModal(false)}
+              onClick={() => setShowBackupModal(false)}
               className="absolute left-4 top-4 text-muted-foreground hover:text-foreground cursor-pointer"
+              aria-label="إغلاق"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="flex items-center gap-3 mb-5 border-b pb-4">
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
-                <Cloud className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              <div className="w-11 h-11 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <Archive className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-xl font-bold">التكامل مع Google Drive</h2>
+                <h2 className="text-lg font-bold">النسخ الاحتياطي والأرشيف المحلي</h2>
                 <p className="text-xs text-muted-foreground">
-                  مزامنة المقايسات، وحفظ النسخ الاحتياطية وتصدير جداول Excel و PDF مباشرة إلى السحابة
+                  حفظ وتصدير المقايسات محلياً على جهازك دون أي اتصال سحابي أو حسابات مدفوعة
                 </p>
               </div>
             </div>
 
-            {/* Auth Section */}
-            <div className="p-4 rounded-xl border bg-muted/30 mb-6">
-              {authUser ? (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    {authUser.photoURL ? (
-                      <img
-                        src={authUser.photoURL}
-                        alt="Profile"
-                        className="w-10 h-10 rounded-full border border-emerald-500/40"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center">
-                        {authUser.displayName?.[0] || "U"}
-                      </div>
-                    )}
-                    <div>
-                      <div className="text-sm font-semibold">
-                        {authUser.displayName || "مستخدم Google"}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {authUser.email}
-                      </div>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleGoogleLogout}
-                    className="text-destructive hover:bg-destructive/10"
-                  >
-                    <LogOut className="w-3.5 h-3.5 ml-1.5" /> تسجيل خروج
-                  </Button>
-                </div>
-              ) : (
-                <div className="text-center py-3">
-                  <p className="text-sm mb-4 text-muted-foreground">
-                    قم بتسجيل الدخول باستخدام حساب Google الخاص بك لحفظ واسترجاع المقايسات مباشرة من Google Drive.
-                  </p>
-                  <button
-                    onClick={handleGoogleLogin}
-                    disabled={isSigningIn}
-                    className="inline-flex items-center justify-center gap-3 bg-white text-gray-800 hover:bg-gray-50 border border-gray-300 font-medium px-5 py-2.5 rounded-lg shadow-sm transition-all duration-150 cursor-pointer disabled:opacity-50"
-                  >
-                    <svg className="w-5 h-5" viewBox="0 0 48 48">
-                      <path
-                        fill="#EA4335"
-                        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                      />
-                      <path
-                        fill="#4285F4"
-                        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                      />
-                    </svg>
-                    <span>
-                      {isSigningIn
-                        ? "جارٍ تسجيل الدخول..."
-                        : "تسجيل الدخول باستخدام Google"}
-                    </span>
-                  </button>
-                </div>
-              )}
+            {/* Local Storage Summary */}
+            <div className="grid grid-cols-3 gap-3 mb-6 p-3.5 rounded-lg border bg-muted/30 text-center">
+              <div>
+                <div className="text-xs text-muted-foreground">المقايسات المحفوظة</div>
+                <div className="text-lg font-bold tabular-nums mt-0.5">{storageStats.projectCount}</div>
+              </div>
+              <div className="border-x">
+                <div className="text-xs text-muted-foreground">إجمالي البنود</div>
+                <div className="text-lg font-bold tabular-nums mt-0.5">{storageStats.totalItems}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">الحجم بالمتصفح</div>
+                <div className="text-lg font-bold tabular-nums mt-0.5">{storageStats.sizeKb} KB</div>
+              </div>
             </div>
 
-            {/* Quick Upload Actions */}
+            {/* Current Estimate Export Actions */}
             <div className="mb-6">
               <h3 className="text-sm font-bold mb-2">
-                حفظ المقايسة الحالية ("{project.projectName || "مشروع"}")
+                تصدير المقايسة الحالية ("{project.projectName || "مشروع"}")
               </h3>
               <div className="grid sm:grid-cols-3 gap-2.5">
                 <Button
                   variant="outline"
-                  className="h-auto py-3 px-3 flex flex-col items-center justify-center gap-2 border-emerald-500/30 hover:border-emerald-500 text-center"
-                  disabled={!authToken || isUploadingToDrive || !estimate.length}
-                  onClick={() => saveToDrive("xlsx")}
+                  className="h-auto py-3 px-3 flex flex-col items-center justify-center gap-2 text-center"
+                  disabled={!estimate.length}
+                  onClick={exportXlsx}
                 >
                   <FileSpreadsheet className="w-5 h-5 text-emerald-600 shrink-0" />
                   <div>
-                    <div className="font-semibold text-xs">حفظ كـ Excel</div>
-                    <div className="text-[10px] text-muted-foreground">جدول كامل بالغلاف</div>
+                    <div className="font-semibold text-xs">تصدير Excel</div>
+                    <div className="text-[11px] text-muted-foreground">جدول كامل بالغلاف</div>
                   </div>
                 </Button>
 
                 <Button
                   variant="outline"
-                  className="h-auto py-3 px-3 flex flex-col items-center justify-center gap-2 border-red-500/30 hover:border-red-500 text-center"
-                  disabled={!authToken || isUploadingToDrive || !estimate.length}
-                  onClick={() => saveToDrive("pdf")}
+                  className="h-auto py-3 px-3 flex flex-col items-center justify-center gap-2 text-center"
+                  disabled={!estimate.length || isExportingPdf}
+                  onClick={handleDownloadPdf}
                 >
                   <FileText className="w-5 h-5 text-red-600 shrink-0" />
                   <div>
-                    <div className="font-semibold text-xs">حفظ كـ PDF</div>
-                    <div className="text-[10px] text-muted-foreground">مستند رسمي للطباعة</div>
+                    <div className="font-semibold text-xs">تصدير PDF</div>
+                    <div className="text-[11px] text-muted-foreground">مستند رسمي للطباعة</div>
                   </div>
                 </Button>
 
                 <Button
                   variant="outline"
-                  className="h-auto py-3 px-3 flex flex-col items-center justify-center gap-2 border-blue-500/30 hover:border-blue-500 text-center"
-                  disabled={!authToken || isUploadingToDrive || !estimate.length}
-                  onClick={() => saveToDrive("json")}
+                  className="h-auto py-3 px-3 flex flex-col items-center justify-center gap-2 text-center"
+                  onClick={exportJson}
                 >
-                  <CloudUpload className="w-5 h-5 text-blue-600 shrink-0" />
+                  <FileJson className="w-5 h-5 text-blue-600 shrink-0" />
                   <div>
-                    <div className="font-semibold text-xs">نسخة احتياطية</div>
-                    <div className="text-[10px] text-muted-foreground">ملف JSON للاستعادة</div>
+                    <div className="font-semibold text-xs">ملف المقايسة JSON</div>
+                    <div className="text-[11px] text-muted-foreground">للمشاركة أو الأرشفة</div>
                   </div>
                 </Button>
               </div>
             </div>
 
-            {/* Stored Files in Drive */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold">
-                  الملفات المحفوظة في مجلد مقايسات_GEA_Estimates
-                </h3>
-                {authToken && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-xs"
-                    disabled={isLoadingDrive}
-                    onClick={() => refreshDriveFiles(authToken)}
-                  >
-                    <RefreshCw
-                      className={`w-3.5 h-3.5 ml-1 ${
-                        isLoadingDrive ? "animate-spin" : ""
-                      }`}
-                    />
-                    تحديث
-                  </Button>
-                )}
+            {/* Full Workspace Backup & Restore */}
+            <div className="p-4 rounded-lg border bg-muted/20 space-y-4">
+              <div className="flex items-start gap-2.5">
+                <HardDrive className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-bold">النسخة الاحتياطية الشاملة (كل المقايسات)</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                    احفظ جميع مقايساتك في ملف واحد لنقلها لجهاز آخر أو حفظها في مستودع GitHub خاص بك.
+                  </p>
+                </div>
               </div>
 
-              {!authToken ? (
-                <div className="text-center py-8 border rounded-lg bg-muted/10 text-muted-foreground text-sm">
-                  قم بتسجيل الدخول لعرض ملفات المقايسات المحفوظة في Google Drive
-                </div>
-              ) : isLoadingDrive ? (
-                <div className="text-center py-8 border rounded-lg bg-muted/10 text-muted-foreground text-sm">
-                  <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-primary" />
-                  جارٍ تحميل الملفات من Google Drive...
-                </div>
-              ) : driveFiles.length === 0 ? (
-                <div className="text-center py-8 border rounded-lg bg-muted/10 text-muted-foreground text-sm">
-                  لا توجد مقايسات محفوظة في مجلد Drive بعد. يمكنك حفظ المقايسة الحالية أعلاه.
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {driveFiles.map((f) => {
-                    const isJson = f.name.endsWith(".json");
-                    const isPdf = f.name.endsWith(".pdf");
-                    return (
-                      <div
-                        key={f.id}
-                        className="flex items-center justify-between p-3 border rounded-lg bg-card hover:bg-muted/30 transition-colors"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {isJson ? (
-                            <FileJson className="w-5 h-5 text-blue-500 shrink-0" />
-                          ) : isPdf ? (
-                            <FileText className="w-5 h-5 text-red-500 shrink-0" />
-                          ) : (
-                            <FileSpreadsheet className="w-5 h-5 text-emerald-500 shrink-0" />
-                          )}
-                          <div className="min-w-0">
-                            <div className="text-sm font-semibold truncate">
-                              {f.name}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {new Date(f.modifiedTime).toLocaleString("ar-EG")}
-                            </div>
-                          </div>
-                        </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <Button onClick={exportAllBackup} className="whitespace-nowrap shrink-0">
+                  <Download className="w-4 h-4 ml-2" /> تحميل نسخة شاملة ({projects.length})
+                </Button>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {isJson && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 text-xs"
-                              onClick={() => loadFromDrive(f)}
-                            >
-                              <CloudDownload className="w-3.5 h-3.5 ml-1" />
-                              استيراد
-                            </Button>
-                          )}
-                          {f.webViewLink && (
-                            <a
-                              href={f.webViewLink}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center justify-center h-8 px-2.5 rounded-md border text-xs text-muted-foreground hover:text-foreground hover:bg-accent"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                            onClick={() => handleDeleteDriveFile(f)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center rounded-md border bg-background p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setRestoreMode("merge")}
+                      className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                        restoreMode === "merge"
+                          ? "bg-primary text-primary-foreground font-medium"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      دمج
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRestoreMode("replace")}
+                      className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                        restoreMode === "replace"
+                          ? "bg-destructive text-destructive-foreground font-medium"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      استبدال الكل
+                    </button>
+                  </div>
+
+                  <input
+                    ref={backupImportRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={(e) => {
+                      importJson(e.target.files?.[0] || null, restoreMode);
+                      e.target.value = "";
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => backupImportRef.current?.click()}
+                    className="whitespace-nowrap shrink-0"
+                  >
+                    <Upload className="w-4 h-4 ml-2" /> استعادة من ملف
+                  </Button>
                 </div>
-              )}
+              </div>
             </div>
           </Card>
         </div>
@@ -1487,10 +1257,9 @@ export default function App() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="text-emerald-700 border-emerald-600/30 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
-                  onClick={() => setShowDriveModal(true)}
+                  onClick={() => setShowBackupModal(true)}
                 >
-                  <Cloud className="w-4 h-4 ml-1 text-emerald-600" /> Google Drive
+                  <Archive className="w-4 h-4 ml-1" /> النسخ الاحتياطي الشامل
                 </Button>
               </div>
             </div>
