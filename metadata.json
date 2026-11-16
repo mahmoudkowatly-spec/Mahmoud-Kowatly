@@ -1,0 +1,8 @@
+{
+  "name": "source- Engineering BOQ Management Platform",
+  "description": "Engineering Bill of Quantities (BOQ) management platform for cost estimation, item catalogs, quantity takeoffs, and project reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
