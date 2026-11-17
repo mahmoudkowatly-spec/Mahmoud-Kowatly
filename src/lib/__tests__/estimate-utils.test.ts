@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import { computeTotals, sectionOf, tafqeet } from "../estimate-utils";
 
 describe("estimate rules", () => {
-  it("classifies codes 5 as sanitary, 6 as electrical", () => {
+  it("classifies codes 5/05 as sanitary, 6/06 as electrical", () => {
     expect(sectionOf("5-2-1")).toBe("sanitary");
+    expect(sectionOf("05/01/02/02")).toBe("sanitary");
     expect(sectionOf("6010151")).toBe("electrical");
+    expect(sectionOf("06/01/01/20")).toBe("electrical");
     expect(sectionOf("1-1-2-4")).toBe("ordinary");
     expect(sectionOf("مستجد", "electrical")).toBe("electrical");
   });

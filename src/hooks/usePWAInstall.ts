@@ -10,6 +10,9 @@ export function usePWAInstall() {
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
+  const [isInIframe, setIsInIframe] = useState(false);
+  const [isSwReady, setIsSwReady] = useState(false);
 
   useEffect(() => {
     const isStandalone =
@@ -18,12 +21,25 @@ export function usePWAInstall() {
         true;
     setIsInstalled(isStandalone);
 
-    const userAgent = window.navigator.userAgent.toLowerCase();
+    const ua = window.navigator.userAgent.toLowerCase();
     const isIOSDevice =
-      /iphone|ipad|ipod/.test(userAgent) ||
+      /iphone|ipad|ipod/.test(ua) ||
       (window.navigator.platform === "MacIntel" &&
         window.navigator.maxTouchPoints > 1);
     setIsIOS(isIOSDevice);
+    setIsAndroid(/android/.test(ua));
+
+    try {
+      setIsInIframe(window.self !== window.top);
+    } catch {
+      setIsInIframe(true);
+    }
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.ready
+        .then(() => setIsSwReady(true))
+        .catch(() => setIsSwReady(false));
+    }
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -63,6 +79,9 @@ export function usePWAInstall() {
     isInstallable: !!deferredPrompt,
     isInstalled,
     isIOS,
+    isAndroid,
+    isInIframe,
+    isSwReady,
     install,
   };
 }

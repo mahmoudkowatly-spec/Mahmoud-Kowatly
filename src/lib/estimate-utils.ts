@@ -6,12 +6,12 @@ export const SECTION_LABELS: Record<Section, string> = {
   electrical: "أعمال كهربائية",
 };
 
-/** GEA codes: starting with 6 = electrical, 5 = sanitary, else ordinary. */
+/** GEA codes: starting with 06/6 = electrical, 05/5 = sanitary, else ordinary. */
 export function sectionOf(code: string, explicit?: Section): Section {
   if (explicit) return explicit;
   const c = code.trim();
-  if (c.startsWith("6")) return "electrical";
-  if (c.startsWith("5")) return "sanitary";
+  if (/^0?6/.test(c)) return "electrical";
+  if (/^0?5/.test(c)) return "sanitary";
   return "ordinary";
 }
 

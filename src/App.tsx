@@ -854,7 +854,9 @@ export default function App() {
                           {estimate.map((x, i) => (
                             <tr key={x.id}>
                               <td className="border border-black p-1.5 text-center">{i + 1}</td>
-                              <td className="border border-black p-1.5 font-mono text-[11px] text-center">{x.code}</td>
+                              <td className="border border-black p-1.5 font-mono text-[11px] text-center">
+                                <span dir="ltr" className="inline-block">{x.code}</span>
+                              </td>
                               <td className="border border-black p-1.5 text-right leading-relaxed">{x.desc}</td>
                               <td className="border border-black p-1.5 text-center">{x.unit}</td>
                               <td className="border border-black p-1.5 text-center">{x.qty.toLocaleString("ar-EG")}</td>
@@ -1044,7 +1046,7 @@ export default function App() {
                   <tr key={x.id} style={{ fontSize: "10.5px" }}>
                     <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>{i + 1}</td>
                     <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center", fontFamily: "monospace" }}>
-                      {x.code}
+                      <span dir="ltr" style={{ display: "inline-block" }}>{x.code}</span>
                     </td>
                     <td style={{ border: "1px solid #000", padding: "6px", textAlign: "right", lineHeight: 1.35 }}>
                       {x.desc}
@@ -1411,7 +1413,7 @@ export default function App() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded">
+                        <span dir="ltr" className="text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded inline-block">
                           {it.code}
                         </span>
                         <span className="text-xs text-muted-foreground">
@@ -1655,7 +1657,7 @@ export default function App() {
                       <tr key={x.id} className="border-t align-top">
                         <td className="p-2">{i + 1}</td>
                         <td className="p-2 font-mono text-xs">
-                          {x.code}
+                          <span dir="ltr" className="inline-block">{x.code}</span>
                           {x.custom && (
                             <div className="text-[10px] text-muted-foreground font-sans">
                               {SECTION_LABELS[sectionOf(x.code, x.section)]}
