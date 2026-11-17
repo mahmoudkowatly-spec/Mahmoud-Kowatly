@@ -43,6 +43,8 @@ import {
   type Section,
 } from "@/lib/estimate-utils";
 import { exportElementToPdf } from "@/lib/export-pdf";
+import { PWAInstallButton } from "@/components/PWAInstallButton";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
 
 type Item = {
   id: number;
@@ -594,6 +596,7 @@ export default function App() {
   return (
     <div dir="rtl" className="min-h-screen bg-background text-foreground font-sans">
       <Toaster position="top-center" richColors />
+      <OfflineIndicator />
 
       {/* Reusable In-App Confirmation Modal (bypasses iframe sandbox restrictions) */}
       {confirmDialog.isOpen && (
@@ -661,6 +664,8 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <PWAInstallButton />
+
             {/* Local Backup & Archive Trigger */}
             <Button
               variant="outline"
@@ -1220,6 +1225,12 @@ export default function App() {
                   </Button>
                 </div>
               </div>
+            </div>
+
+            {/* Offline & Install Info */}
+            <div className="mt-4 p-3.5 rounded-lg border text-xs text-muted-foreground leading-relaxed">
+              <strong className="text-foreground">العمل بدون إنترنت (Offline PWA):</strong>{" "}
+              يتم تخزين واجهة التطبيق وقاعدة بيانات البنود ({items?.length ?? "..."} بند) تلقائياً على جهازك للعمل دون اتصال. للتثبيت على الكمبيوتر أو الهاتف، اضغط زر <strong>تثبيت التطبيق</strong> بالأعلى أو اختر <strong>تثبيت التطبيق / Add to Home Screen</strong> من قائمة المتصفح.
             </div>
           </Card>
         </div>
