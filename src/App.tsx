@@ -43,8 +43,8 @@ import {
   type Section,
 } from "@/lib/estimate-utils";
 import { exportElementToPdf } from "@/lib/export-pdf";
-import { PWAInstallButton } from "@/components/PWAInstallButton";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
+import { WelcomeScreen } from "@/components/WelcomeScreen";
 
 type Item = {
   id: number;
@@ -112,6 +112,7 @@ export default function App() {
   const [activeId, setActiveId] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(true);
   const [showProjects, setShowProjects] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
@@ -593,6 +594,16 @@ export default function App() {
 
   const sections: Section[] = ["ordinary", "sanitary", "electrical"];
 
+  if (showWelcome) {
+    return (
+      <>
+        <Toaster position="top-center" richColors />
+        <OfflineIndicator />
+        <WelcomeScreen onEnter={() => setShowWelcome(false)} />
+      </>
+    );
+  }
+
   return (
     <div dir="rtl" className="min-h-screen bg-background text-foreground font-sans">
       <Toaster position="top-center" richColors />
@@ -648,7 +659,12 @@ export default function App() {
       )}
       <header className="border-b bg-card sticky top-0 z-20 print:hidden shadow-xs">
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowWelcome(true)}
+            className="flex items-center gap-3 text-right cursor-pointer hover:opacity-85 transition-opacity"
+            title="العودة إلى صفحة البداية"
+          >
             <div className="w-10 h-10 rounded-lg bg-primary text-primary-foreground grid place-items-center shadow-xs">
               <FileSpreadsheet className="w-5 h-5" />
             </div>
@@ -661,11 +677,9 @@ export default function App() {
                 {items?.length ?? "..."} بند
               </p>
             </div>
-          </div>
+          </button>
 
           <div className="flex flex-wrap items-center gap-2">
-            <PWAInstallButton />
-
             {/* Local Backup & Archive Trigger */}
             <Button
               variant="outline"

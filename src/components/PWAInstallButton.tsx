@@ -5,7 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 
-export function PWAInstallButton() {
+type PWAInstallButtonProps = {
+  variant?: "default" | "welcome";
+};
+
+export function PWAInstallButton({ variant = "default" }: PWAInstallButtonProps) {
   const {
     isInstallable,
     isInstalled,
@@ -35,14 +39,25 @@ export function PWAInstallButton() {
 
   return (
     <>
-      <Button
-        variant={isInstallable ? "default" : "outline"}
-        onClick={handleClick}
-        className="whitespace-nowrap shrink-0 flex items-center gap-2"
-      >
-        <Download className="w-4 h-4" />
-        <span>تثبيت التطبيق</span>
-      </Button>
+      {variant === "welcome" ? (
+        <button
+          type="button"
+          onClick={handleClick}
+          className="w-full inline-flex items-center justify-center gap-2.5 rounded-full border-2 border-[#063116]/30 bg-[#eef4f0] hover:bg-[#e1ece5] active:scale-[0.99] text-[#063116] font-bold text-base sm:text-lg py-3 px-6 transition-all cursor-pointer"
+        >
+          <Download className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+          <span>تثبيت التطبيق (يعمل بدون إنترنت)</span>
+        </button>
+      ) : (
+        <Button
+          variant={isInstallable ? "default" : "outline"}
+          onClick={handleClick}
+          className="whitespace-nowrap shrink-0 flex items-center gap-2"
+        >
+          <Download className="w-4 h-4" />
+          <span>تثبيت التطبيق</span>
+        </Button>
+      )}
 
       {showGuide && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
