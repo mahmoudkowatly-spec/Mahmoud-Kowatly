@@ -15,6 +15,117 @@ export function sectionOf(code: string, explicit?: Section): Section {
   return "ordinary";
 }
 
+export const SECTION_ORDER: readonly Section[] = ["ordinary", "sanitary", "electrical"];
+
+export const SECTION_TITLES: Record<
+  Section,
+  { ordinal: string; heading: string; subtotalLabel: string }
+> = {
+  ordinary: {
+    ordinal: "أولاً",
+    heading: "الأعمال الاعتيادية",
+    subtotalLabel: "إجمالي الأعمال الاعتيادية",
+  },
+  sanitary: {
+    ordinal: "ثانياً",
+    heading: "الأعمال الصحية",
+    subtotalLabel: "إجمالي الأعمال الصحية",
+  },
+  electrical: {
+    ordinal: "ثالثاً",
+    heading: "الأعمال الكهربائية",
+    subtotalLabel: "إجمالي الأعمال الكهربائية",
+  },
+};
+
+function tokenizeCode(code: string): { hasDigits: boolean; parts: string[] } {
+  const trimmed = code.trim();
+  const hasDigits = /\d/.test(trimmed);
+  if (!hasDigits) return { hasDigits: false, parts: [trimmed] };
+  const parts = trimmed
+    .split(/[\/\-.\s\\]+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return { hasDigits: true, parts };
+}
+
+/** Compares GEA item codes numerically segment-by-segment; non-numeric custom codes sort after coded items. */
+export function compareItemCodes(a: string, b: string): number {
+  const ta = tokenizeCode(a);
+  const tb = tokenizeCode(b);
+  if (ta.hasDigits !== tb.hasDigits) return ta.hasDigits ? -1 : 1;
+  if (!ta.hasDigits) return a.trim().localeCompare(b.trim(), "ar");
+
+  const len = Math.min(ta.parts.length, tb.parts.length);
+  for (let i = 0; i < len; i++) {
+    const pa = ta.parts[i];
+    const pb = tb.parts[i];
+    const aNum = /^\d+$/.test(pa);
+    const bNum = /^\d+$/.test(pb);
+    if (aNum && bNum) {
+      const diff = Number(pa) - Number(pb);
+      if (diff !== 0) return diff;
+    } else if (aNum !== bNum) {
+      return aNum ? -1 : 1;
+    } else {
+      const cmp = pa.localeCompare(pb, "ar");
+      if (cmp !== 0) return cmp;
+    }
+  }
+  if (ta.parts.length !== tb.parts.length) return ta.parts.length - tb.parts.length;
+  return a.trim().localeCompare(b.trim(), "ar");
+}
+
+/** Sorts items by Excel section order (ordinary -> sanitary -> electrical), then by item code ascending. */
+export function sortEstimateItems<T extends { code: string; section?: Section }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => {
+    const sa = SECTION_ORDER.indexOf(sectionOf(a.code, a.section));
+    const sb = SECTION_ORDER.indexOf(sectionOf(b.code, b.section));
+    if (sa !== sb) return sa - sb;
+    return compareItemCodes(a.code, b.code);
+  });
+}
+
+export type EstimateSectionGroup<T> = {
+  section: Section;
+  ordinal: string;
+  heading: string;
+  subtotalLabel: string;
+  items: (T & { seq: number })[];
+  subtotal: number;
+};
+
+/** Groups sorted items into non-empty Excel-ordered sections with continuous 1-based serial numbers and subtotals. */
+export function groupEstimateBySection<
+  T extends { code: string; qty: number; rate: number; section?: Section },
+>(items: readonly T[]): EstimateSectionGroup<T>[] {
+  const sorted = sortEstimateItems(items);
+  const bySection: Record<Section, T[]> = {
+    ordinary: [],
+    sanitary: [],
+    electrical: [],
+  };
+  for (const item of sorted) {
+    bySection[sectionOf(item.code, item.section)].push(item);
+  }
+
+  let seq = 1;
+  const groups: EstimateSectionGroup<T>[] = [];
+  for (const section of SECTION_ORDER) {
+    const arr = bySection[section];
+    if (!arr.length) continue;
+    const titledItems = arr.map((item) => ({ ...item, seq: seq++ }));
+    const subtotal = arr.reduce((sum, item) => sum + item.qty * item.rate, 0);
+    groups.push({
+      section,
+      ...SECTION_TITLES[section],
+      items: titledItems,
+      subtotal,
+    });
+  }
+  return groups;
+}
+
 /** The adjustment on the grand total is either a premium (علاوة, added) or a discount (خصم, subtracted). */
 export type AdjustmentMode = "premium" | "discount";
 

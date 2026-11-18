@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,8 +22,6 @@ import {
   Copy,
   Upload,
   FileJson,
-  ArrowUp,
-  ArrowDown,
   Check,
   PenLine,
   FileText,
@@ -31,6 +29,8 @@ import {
   HardDrive,
   Loader2,
   Eye,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { exportEstimate } from "@/lib/export-estimate";
@@ -38,9 +38,11 @@ import {
   adjustmentLabels,
   computeTotals,
   fmt,
+  groupEstimateBySection,
   sectionOf,
   SECTION_LABELS,
   signedPercent,
+  sortEstimateItems,
   tafqeet,
   type AdjustmentMode,
   type Section,
@@ -77,6 +79,19 @@ type Project = {
   adjustmentMode?: AdjustmentMode;
   logoDataUrl: string;
   estimate: LineItem[];
+};
+
+type ProjectDetailsDraft = Pick<
+  Project,
+  | "orgName"
+  | "projectName"
+  | "governorate"
+  | "clientName"
+  | "refNumber"
+  | "discountPercent"
+  | "logoDataUrl"
+> & {
+  adjustmentMode: AdjustmentMode;
 };
 
 const STORE_KEY = "gea_projects_v2";
@@ -126,6 +141,26 @@ export default function App() {
   const [restoreMode, setRestoreMode] = useState<"merge" | "replace">("merge");
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [projectModal, setProjectModal] = useState<{
+    isOpen: boolean;
+    mode: "create" | "edit";
+    draft: ProjectDetailsDraft;
+  }>({
+    isOpen: false,
+    mode: "create",
+    draft: {
+      orgName: "",
+      projectName: "",
+      governorate: "",
+      clientName: "",
+      refNumber: "",
+      discountPercent: 0,
+      adjustmentMode: "premium",
+      logoDataUrl: "",
+    },
+  });
 
   // In-app confirmation dialog state (replaces blocked window.confirm in iframe sandbox)
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -163,6 +198,18 @@ export default function App() {
   const importRef = useRef<HTMLInputElement>(null);
   const backupImportRef = useRef<HTMLInputElement>(null);
   const printableAreaRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const closeSearchModal = () => {
+    setShowSearchModal(false);
+    setShowCustom(false);
+  };
+
+  useEffect(() => {
+    if (!showSearchModal) return;
+    const t = setTimeout(() => searchInputRef.current?.focus(), 40);
+    return () => clearTimeout(t);
+  }, [showSearchModal]);
 
   useEffect(() => {
     setMounted(true);
@@ -265,14 +312,21 @@ export default function App() {
     return scored.slice(0, 100).map((s) => s.it);
   }, [items, query, filter]);
 
+  const groupedEstimate = useMemo(
+    () => groupEstimateBySection(estimate),
+    [estimate],
+  );
+
   const addItem = (it: Item) => {
     if (qtyById.has(it.id)) {
       setEstimate((prev) =>
-        prev.map((p) => (p.id === it.id ? { ...p, qty: p.qty + 1 } : p)),
+        sortEstimateItems(
+          prev.map((p) => (p.id === it.id ? { ...p, qty: p.qty + 1 } : p)),
+        ),
       );
       toast.info("البند مضاف بالفعل — تمت زيادة الكمية");
     } else {
-      setEstimate((prev) => [...prev, { ...it, qty: 1 }]);
+      setEstimate((prev) => sortEstimateItems([...prev, { ...it, qty: 1 }]));
       toast.success("تمت إضافة البند");
     }
   };
@@ -284,25 +338,6 @@ export default function App() {
 
   const removeItem = (id: number) =>
     setEstimate((p) => p.filter((x) => x.id !== id));
-
-  const move = (idx: number, dir: -1 | 1) =>
-    setEstimate((p) => {
-      const j = idx + dir;
-      if (j < 0 || j >= p.length) return p;
-      const n = [...p];
-      [n[idx], n[j]] = [n[j], n[idx]];
-      return n;
-    });
-
-  const sortBySection = () =>
-    setEstimate((p) => {
-      const order: Section[] = ["ordinary", "sanitary", "electrical"];
-      return [...p].sort(
-        (a, b) =>
-          order.indexOf(sectionOf(a.code, a.section)) -
-          order.indexOf(sectionOf(b.code, b.section)),
-      );
-    });
 
   const clearAll = () => {
     requestConfirm(
@@ -320,15 +355,63 @@ export default function App() {
   const totals = computeTotals(estimate, signedPct);
 
   // ---- Projects ----
-  const createProject = () => {
-    const p = newProject({
-      orgName: project.orgName,
-      logoDataUrl: project.logoDataUrl,
+  const openCreateProjectModal = () => {
+    setProjectModal({
+      isOpen: true,
+      mode: "create",
+      draft: {
+        orgName: project.orgName,
+        projectName: "",
+        governorate: "",
+        clientName: "",
+        refNumber: "",
+        discountPercent: 0,
+        adjustmentMode: "premium",
+        logoDataUrl: project.logoDataUrl,
+      },
     });
-    setProjects((l) => [p, ...l]);
-    setActiveId(p.id);
-    setShowProjects(false);
-    toast.success("تم إنشاء مقايسة جديدة");
+  };
+
+  const openEditProjectModal = () => {
+    setProjectModal({
+      isOpen: true,
+      mode: "edit",
+      draft: {
+        orgName: project.orgName,
+        projectName: project.projectName,
+        governorate: project.governorate,
+        clientName: project.clientName,
+        refNumber: project.refNumber,
+        discountPercent: project.discountPercent || 0,
+        adjustmentMode: adjMode,
+        logoDataUrl: project.logoDataUrl,
+      },
+    });
+  };
+
+  const closeProjectModal = () => {
+    setProjectModal((prev) => ({ ...prev, isOpen: false }));
+  };
+
+  const saveProjectModal = () => {
+    if (projectModal.mode === "create") {
+      const p = newProject({
+        ...projectModal.draft,
+        discountPercent: Math.abs(Number(projectModal.draft.discountPercent)) || 0,
+      });
+      setProjects((l) => [p, ...l]);
+      setActiveId(p.id);
+      setShowProjects(false);
+      setProjectModal((prev) => ({ ...prev, isOpen: false }));
+      toast.success("تم إنشاء مقايسة جديدة");
+    } else {
+      update({
+        ...projectModal.draft,
+        discountPercent: Math.abs(Number(projectModal.draft.discountPercent)) || 0,
+      });
+      setProjectModal((prev) => ({ ...prev, isOpen: false }));
+      toast.success("تم تحديث بيانات المشروع");
+    }
   };
 
   const duplicateProject = (src: Project) => {
@@ -457,11 +540,15 @@ export default function App() {
     });
   };
 
-  const onLogoPick = (f: File | null) => {
+  const onDraftLogoPick = (f: File | null) => {
     if (!f) return;
     if (f.size > 1024 * 1024) return toast.error("حجم الصورة أكبر من 1MB");
     const reader = new FileReader();
-    reader.onload = () => update({ logoDataUrl: String(reader.result || "") });
+    reader.onload = () =>
+      setProjectModal((prev) => ({
+        ...prev,
+        draft: { ...prev.draft, logoDataUrl: String(reader.result || "") },
+      }));
     reader.readAsDataURL(f);
   };
 
@@ -588,19 +675,6 @@ export default function App() {
     return { projectCount: projects.length, totalItems, sizeKb };
   }, [projects, activeId]);
 
-  const field = (label: string, key: keyof Project, placeholder: string) => (
-    <div>
-      <label className="text-xs font-semibold mb-1 block">{label}</label>
-      <Input
-        value={String(project[key] ?? "")}
-        onChange={(e) =>
-          update({ [key]: e.target.value } as Partial<Project>)
-        }
-        placeholder={placeholder}
-      />
-    </div>
-  );
-
   const sections: Section[] = ["ordinary", "sanitary", "electrical"];
 
   if (showWelcome) {
@@ -663,6 +737,250 @@ export default function App() {
                 {confirmDialog.confirmLabel || "تأكيد"}
               </Button>
             </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Separate Create / Edit Project Details Modal */}
+      {projectModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl p-6 bg-card border-2 shadow-2xl relative max-h-[92vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={closeProjectModal}
+              className="absolute left-4 top-4 text-muted-foreground hover:text-foreground cursor-pointer"
+              aria-label="إغلاق"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5 border-b pb-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary grid place-items-center shrink-0">
+                {projectModal.mode === "create" ? (
+                  <FilePlus2 className="w-5 h-5" />
+                ) : (
+                  <PenLine className="w-5 h-5" />
+                )}
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">
+                  {projectModal.mode === "create"
+                    ? "بيانات المقايسة الجديدة"
+                    : "تعديل بيانات المشروع"}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {projectModal.mode === "create"
+                    ? "أدخل بيانات المشروع الأساسية للبدء في إعداد المقايسة"
+                    : "تحديث بيانات المشروع ونسبة العلاوة / الخصم وشعار الجهة"}
+                </p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveProjectModal();
+              }}
+              className="space-y-4"
+            >
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold mb-1 block">
+                    اسم الجهة (يظهر أعلى الغلاف)
+                  </label>
+                  <Input
+                    value={projectModal.draft.orgName}
+                    onChange={(e) =>
+                      setProjectModal((prev) => ({
+                        ...prev,
+                        draft: { ...prev.draft, orgName: e.target.value },
+                      }))
+                    }
+                    placeholder="مثال: مؤسسة / إدارة ..."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold mb-1 block">
+                    اسم المشروع / عنوان المقايسة
+                  </label>
+                  <Input
+                    autoFocus
+                    value={projectModal.draft.projectName}
+                    onChange={(e) =>
+                      setProjectModal((prev) => ({
+                        ...prev,
+                        draft: { ...prev.draft, projectName: e.target.value },
+                      }))
+                    }
+                    placeholder="مثال: المقايسة التقديرية لمدرسة ..."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold mb-1 block">
+                    المحافظة / الموقع
+                  </label>
+                  <Input
+                    value={projectModal.draft.governorate}
+                    onChange={(e) =>
+                      setProjectModal((prev) => ({
+                        ...prev,
+                        draft: { ...prev.draft, governorate: e.target.value },
+                      }))
+                    }
+                    placeholder="مثال: مركز ... - محافظة ..."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold mb-1 block">
+                    الجهة / العميل
+                  </label>
+                  <Input
+                    value={projectModal.draft.clientName}
+                    onChange={(e) =>
+                      setProjectModal((prev) => ({
+                        ...prev,
+                        draft: { ...prev.draft, clientName: e.target.value },
+                      }))
+                    }
+                    placeholder="مثال: مديرية التربية والتعليم"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold mb-1 block">
+                    رقم التعريفى
+                  </label>
+                  <Input
+                    value={projectModal.draft.refNumber}
+                    onChange={(e) =>
+                      setProjectModal((prev) => ({
+                        ...prev,
+                        draft: { ...prev.draft, refNumber: e.target.value },
+                      }))
+                    }
+                    placeholder="مثال: 2700290"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold mb-1 block">
+                    {adjustmentLabels(projectModal.draft.adjustmentMode).pct} (%)
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.0001"
+                      value={projectModal.draft.discountPercent}
+                      onChange={(e) =>
+                        setProjectModal((prev) => ({
+                          ...prev,
+                          draft: {
+                            ...prev.draft,
+                            discountPercent:
+                              Math.abs(parseFloat(e.target.value)) || 0,
+                          },
+                        }))
+                      }
+                    />
+                    <div
+                      className="flex shrink-0 gap-1"
+                      role="group"
+                      aria-label="نوع التعديل على الإجمالي"
+                    >
+                      {(["premium", "discount"] as const).map((m) => (
+                        <Button
+                          key={m}
+                          type="button"
+                          size="sm"
+                          variant={
+                            projectModal.draft.adjustmentMode === m
+                              ? "default"
+                              : "outline"
+                          }
+                          aria-pressed={projectModal.draft.adjustmentMode === m}
+                          onClick={() =>
+                            setProjectModal((prev) => ({
+                              ...prev,
+                              draft: { ...prev.draft, adjustmentMode: m },
+                            }))
+                          }
+                        >
+                          {adjustmentLabels(m).short}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-semibold mb-1 block">
+                    شعار الجهة (يظهر على الغلاف)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      className="hidden"
+                      onChange={(e) => {
+                        onDraftLogoPick(e.target.files?.[0] || null);
+                        e.target.value = "";
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => logoInputRef.current?.click()}
+                    >
+                      <ImageIcon className="w-4 h-4 ml-2" /> اختر صورة اللوجو
+                    </Button>
+                    {projectModal.draft.logoDataUrl && (
+                      <>
+                        <img
+                          src={projectModal.draft.logoDataUrl}
+                          alt="شعار الجهة"
+                          className="h-12 w-12 object-contain border rounded"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setProjectModal((prev) => ({
+                              ...prev,
+                              draft: { ...prev.draft, logoDataUrl: "" },
+                            }))
+                          }
+                        >
+                          <X className="w-4 h-4 ml-1" /> إزالة
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeProjectModal}
+                >
+                  إلغاء
+                </Button>
+                <Button type="submit">
+                  <Check className="w-4 h-4 ml-1.5" />
+                  {projectModal.mode === "create"
+                    ? "إنشاء المقايسة"
+                    : "حفظ التعديلات"}
+                </Button>
+              </div>
+            </form>
           </Card>
         </div>
       )}
@@ -874,18 +1192,35 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {estimate.map((x, i) => (
-                            <tr key={x.id}>
-                              <td className="border border-black p-1.5 text-center">{i + 1}</td>
-                              <td className="border border-black p-1.5 font-mono text-[11px] text-center">
-                                <span dir="ltr" className="inline-block">{x.code}</span>
-                              </td>
-                              <td className="border border-black p-1.5 text-right leading-relaxed">{x.desc}</td>
-                              <td className="border border-black p-1.5 text-center">{x.unit}</td>
-                              <td className="border border-black p-1.5 text-center">{x.qty.toLocaleString("ar-EG")}</td>
-                              <td className="border border-black p-1.5 text-center">{x.rate.toLocaleString("ar-EG")}</td>
-                              <td className="border border-black p-1.5 text-center font-semibold">{fmt(x.qty * x.rate)}</td>
-                            </tr>
+                          {groupedEstimate.map((group) => (
+                            <Fragment key={group.section}>
+                              <tr className="bg-neutral-100 font-bold">
+                                <td colSpan={7} className="border border-black p-1.5 text-right">
+                                  {group.ordinal}: {group.heading} ({group.items.length})
+                                </td>
+                              </tr>
+                              {group.items.map((x) => (
+                                <tr key={x.id}>
+                                  <td className="border border-black p-1.5 text-center">{x.seq}</td>
+                                  <td className="border border-black p-1.5 font-mono text-[11px] text-center">
+                                    <span dir="ltr" className="inline-block">{x.code}</span>
+                                  </td>
+                                  <td className="border border-black p-1.5 text-right leading-relaxed">{x.desc}</td>
+                                  <td className="border border-black p-1.5 text-center">{x.unit}</td>
+                                  <td className="border border-black p-1.5 text-center">{x.qty.toLocaleString("ar-EG")}</td>
+                                  <td className="border border-black p-1.5 text-center">{x.rate.toLocaleString("ar-EG")}</td>
+                                  <td className="border border-black p-1.5 text-center font-semibold">{fmt(x.qty * x.rate)}</td>
+                                </tr>
+                              ))}
+                              <tr className="bg-[#d9d9d9] font-bold">
+                                <td colSpan={6} className="border border-black p-1.5 text-center">
+                                  {group.subtotalLabel}
+                                </td>
+                                <td className="border border-black p-1.5 text-center">
+                                  {fmt(group.subtotal)}
+                                </td>
+                              </tr>
+                            </Fragment>
                           ))}
                         </tbody>
                         <tfoot>
@@ -1065,26 +1400,43 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
-                {estimate.map((x, i) => (
-                  <tr key={x.id} style={{ fontSize: "10.5px" }}>
-                    <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>{i + 1}</td>
-                    <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center", fontFamily: "monospace" }}>
-                      <span dir="ltr" style={{ display: "inline-block" }}>{x.code}</span>
-                    </td>
-                    <td style={{ border: "1px solid #000", padding: "6px", textAlign: "right", lineHeight: 1.35 }}>
-                      {x.desc}
-                    </td>
-                    <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>{x.unit}</td>
-                    <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>
-                      {x.qty.toLocaleString("ar-EG")}
-                    </td>
-                    <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>
-                      {x.rate.toLocaleString("ar-EG")}
-                    </td>
-                    <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center", fontWeight: "bold" }}>
-                      {fmt(x.qty * x.rate)}
-                    </td>
-                  </tr>
+                {groupedEstimate.map((group) => (
+                  <Fragment key={group.section}>
+                    <tr style={{ backgroundColor: "#efefef", fontWeight: "bold", fontSize: "11px" }}>
+                      <td colSpan={7} style={{ border: "1px solid #000", padding: "6px", textAlign: "right" }}>
+                        {group.ordinal}: {group.heading} ({group.items.length})
+                      </td>
+                    </tr>
+                    {group.items.map((x) => (
+                      <tr key={x.id} style={{ fontSize: "10.5px" }}>
+                        <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>{x.seq}</td>
+                        <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center", fontFamily: "monospace" }}>
+                          <span dir="ltr" style={{ display: "inline-block" }}>{x.code}</span>
+                        </td>
+                        <td style={{ border: "1px solid #000", padding: "6px", textAlign: "right", lineHeight: 1.35 }}>
+                          {x.desc}
+                        </td>
+                        <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>{x.unit}</td>
+                        <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>
+                          {x.qty.toLocaleString("ar-EG")}
+                        </td>
+                        <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>
+                          {x.rate.toLocaleString("ar-EG")}
+                        </td>
+                        <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center", fontWeight: "bold" }}>
+                          {fmt(x.qty * x.rate)}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr style={{ backgroundColor: "#d9d9d9", fontWeight: "bold", fontSize: "11px" }}>
+                      <td colSpan={6} style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>
+                        {group.subtotalLabel}
+                      </td>
+                      <td style={{ border: "1px solid #000", padding: "6px", textAlign: "center" }}>
+                        {fmt(group.subtotal)}
+                      </td>
+                    </tr>
+                  </Fragment>
                 ))}
               </tbody>
               <tfoot>
@@ -1267,7 +1619,7 @@ export default function App() {
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h2 className="font-semibold">المقايسات المحفوظة</h2>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={createProject}>
+                <Button size="sm" onClick={openCreateProjectModal}>
                   <FilePlus2 className="w-4 h-4 ml-1" /> مقايسة جديدة
                 </Button>
                 <Button size="sm" variant="outline" onClick={exportJson}>
@@ -1365,305 +1717,97 @@ export default function App() {
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto px-4 py-6 grid lg:grid-cols-5 gap-6">
-        {/* Search panel */}
-        <section className="lg:col-span-2 space-y-4">
-          <Card className="p-4">
-            <label className="text-sm font-semibold mb-2 block">
-              بحث عن بند
-            </label>
-            <div className="relative">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setQuery("");
-                  if (e.key === "Enter" && results[0]) addItem(results[0]);
-                }}
-                placeholder="أدخل كود البند أو جزء من منطوق البند"
-                className="pr-10 h-11"
-              />
-            </div>
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {(["all", ...sections] as Filter[]).map((f) => (
-                <Button
-                  key={f}
-                  size="sm"
-                  variant={filter === f ? "default" : "outline"}
-                  className="h-7 text-xs"
-                  onClick={() => setFilter(f)}
-                >
-                  {f === "all" ? "الكل" : SECTION_LABELS[f]}
-                </Button>
-              ))}
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <p className="text-xs text-muted-foreground">
-                {items
-                  ? `${results.length} نتيجة • Enter لإضافة أول نتيجة`
-                  : "جارٍ تحميل قاعدة البيانات..."}
-              </p>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 text-xs"
-                onClick={() => setShowCustom((v) => !v)}
-              >
-                <PenLine className="w-3.5 h-3.5 ml-1" /> بند مستجد
-              </Button>
-            </div>
-            {showCustom && (
-              <CustomItemForm
-                onAdd={(li) => {
-                  setEstimate((p) => [...p, li]);
-                  setShowCustom(false);
-                  toast.success("تمت إضافة البند المستجد");
-                }}
-              />
-            )}
-          </Card>
-
-          <div className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto pl-1">
-            {results.map((it) => {
-              const q = qtyById.get(it.id);
-              return (
-                <Card
-                  key={it.id}
-                  className={`p-3 transition-colors ${
-                    q !== undefined
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-primary"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span dir="ltr" className="text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded inline-block">
-                          {it.code}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {it.part} • ص {it.page}
-                        </span>
-                        {q !== undefined && (
-                          <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded inline-flex items-center gap-1">
-                            <Check className="w-3 h-3" /> مضاف
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm leading-relaxed line-clamp-3">
-                        {it.desc}
-                      </p>
-                      <div className="flex gap-4 mt-2 text-sm">
-                        <span className="text-muted-foreground">
-                          الوحدة:{" "}
-                          <span className="text-foreground">{it.unit}</span>
-                        </span>
-                        <span className="font-semibold text-primary">
-                          {it.rate.toLocaleString("ar-EG")} ج.م
-                        </span>
-                      </div>
-                    </div>
-                    {q !== undefined ? (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          onClick={() => updateQty(it.id, q + 1)}
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </Button>
-                        <Input
-                          type="number"
-                          value={q}
-                          onChange={(e) =>
-                            updateQty(
-                              it.id,
-                              parseFloat(e.target.value) || 0,
-                            )
-                          }
-                          className="h-7 w-16 text-center px-1"
-                        />
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          onClick={() => updateQty(it.id, q - 1)}
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button size="sm" onClick={() => addItem(it)}>
-                        <Plus className="w-4 h-4" />
-                      </Button>
+      <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        {/* Estimate panel */}
+        <section className="space-y-4">
+          {/* Compact Project Details Summary Strip */}
+          <Card className="px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {project.logoDataUrl && (
+                  <img
+                    src={project.logoDataUrl}
+                    alt="شعار الجهة"
+                    className="h-10 w-10 object-contain border rounded-md bg-white shrink-0"
+                  />
+                )}
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <h2 className="font-bold text-sm sm:text-base truncate">
+                      {project.projectName || "مقايسة جديدة بدون اسم"}
+                    </h2>
+                    {project.orgName && (
+                      <span className="text-xs text-muted-foreground">
+                        • {project.orgName}
+                      </span>
                     )}
                   </div>
-                </Card>
-              );
-            })}
-            {items && !results.length && (
-              <p className="text-center text-muted-foreground py-8 text-sm">
-                لا توجد نتائج مطابقة
-              </p>
-            )}
-          </div>
-        </section>
-
-        {/* Estimate panel */}
-        <section className="lg:col-span-3 space-y-4">
-          <Card className="p-4">
-            <div className="grid sm:grid-cols-2 gap-3">
-              {field(
-                "اسم الجهة (يظهر أعلى الغلاف)",
-                "orgName",
-                "مثال: مؤسسة / إدارة ...",
-              )}
-              {field(
-                "اسم المشروع / عنوان المقايسة",
-                "projectName",
-                "مثال: المقايسة التقديرية لمدرسة ...",
-              )}
-              {field(
-                "المحافظة / الموقع",
-                "governorate",
-                "مثال: مركز ... - محافظة ...",
-              )}
-              {field(
-                "الجهة / العميل",
-                "clientName",
-                "مثال: مديرية التربية والتعليم",
-              )}
-              {field("رقم التعريفى", "refNumber", "مثال: 2700290")}
-              <div>
-                <label className="text-xs font-semibold mb-1 block">
-                  {adj.pct} (%)
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.0001"
-                    value={project.discountPercent}
-                    onChange={(e) =>
-                      update({
-                        discountPercent: Math.abs(parseFloat(e.target.value)) || 0,
-                      })
-                    }
-                  />
-                  <div className="flex shrink-0 gap-1" role="group" aria-label="نوع التعديل على الإجمالي">
-                    {(["premium", "discount"] as const).map((m) => (
-                      <Button
-                        key={m}
-                        type="button"
-                        size="sm"
-                        variant={adjMode === m ? "default" : "outline"}
-                        aria-pressed={adjMode === m}
-                        onClick={() => update({ adjustmentMode: m })}
-                      >
-                        {adjustmentLabels(m).short}
-                      </Button>
-                    ))}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
+                    {project.clientName && (
+                      <span>الجهة: {project.clientName}</span>
+                    )}
+                    {project.governorate && (
+                      <span>الموقع: {project.governorate}</span>
+                    )}
+                    {project.refNumber && (
+                      <span>
+                        الرقم التعريفي:{" "}
+                        <span dir="ltr" className="font-mono">
+                          {project.refNumber}
+                        </span>
+                      </span>
+                    )}
+                    <span>
+                      {adj.short}:{" "}
+                      <strong className="text-foreground tabular-nums">
+                        {Math.abs(signedPct)}%
+                      </strong>
+                    </span>
+                    {!project.projectName &&
+                      !project.clientName &&
+                      !project.governorate &&
+                      !project.refNumber && (
+                        <span className="text-muted-foreground/80">
+                          اضغط «تعديل البيانات» لإضافة تفاصيل المشروع والجهة
+                        </span>
+                      )}
                   </div>
                 </div>
               </div>
-              <div className="sm:col-span-2">
-                <label className="text-xs font-semibold mb-1 block">
-                  شعار الجهة (يظهر على الغلاف)
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    ref={logoInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    className="hidden"
-                    onChange={(e) => onLogoPick(e.target.files?.[0] || null)}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => logoInputRef.current?.click()}
-                  >
-                    <ImageIcon className="w-4 h-4 ml-2" /> اختر صورة اللوجو
-                  </Button>
-                  {project.logoDataUrl && (
-                    <>
-                      <img
-                        src={project.logoDataUrl}
-                        alt="logo"
-                        className="h-12 w-12 object-contain border rounded"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => update({ logoDataUrl: "" })}
-                      >
-                        <X className="w-4 h-4 ml-1" /> إزالة
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </Card>
 
-          {/* Summary */}
-          <Card className="p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {sections.map((s) => (
-                <div key={s} className="rounded-lg border p-3">
-                  <div className="text-xs text-muted-foreground">
-                    {SECTION_LABELS[s]}
-                  </div>
-                  <div className="font-bold mt-1">{fmt(totals[s])}</div>
-                </div>
-              ))}
-              <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">
-                  {adj.before}
-                </div>
-                <div className="font-bold mt-1">{fmt(totals.grand)}</div>
-              </div>
-              <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">
-                  {adj.short} ({Math.abs(signedPct)}%)
-                </div>
-                <div
-                  className={
-                    adjMode === "discount" ? "font-bold mt-1 text-destructive" : "font-bold mt-1"
-                  }
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={openEditProjectModal}
                 >
-                  {fmt(Math.abs(totals.premium))}
-                </div>
-              </div>
-              <div className="rounded-lg border-2 border-primary bg-primary/10 p-3">
-                <div className="text-xs text-muted-foreground">
-                  الإجمالي العام
-                </div>
-                <div className="font-bold mt-1 text-primary">
-                  {fmt(totals.net)} ج.م
-                </div>
+                  <PenLine className="w-3.5 h-3.5 ml-1.5" /> تعديل البيانات
+                </Button>
               </div>
             </div>
-
-            <p className="mt-3 text-sm font-semibold leading-relaxed text-center border p-2 rounded bg-muted/20">
-              {tafqeet(totals.net)}
-            </p>
           </Card>
 
           <Card className="overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b bg-muted/40">
-              <h2 className="font-semibold">
-                بنود المقايسة ({estimate.length})
-              </h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-semibold">
+                  بنود المقايسة ({estimate.length})
+                </h2>
+                {groupedEstimate.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    •{" "}
+                    {groupedEstimate
+                      .map((g) => `${g.heading} (${g.items.length})`)
+                      .join(" • ")}
+                  </span>
+                )}
+              </div>
               {estimate.length > 0 && (
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" onClick={sortBySection}>
-                    ترتيب حسب القسم
-                  </Button>
+                <div className="flex items-center gap-2">
+                  <span className="hidden sm:inline-block text-[11px] text-muted-foreground bg-background border px-2 py-0.5 rounded">
+                    مرتبة حسب القسم والكود
+                  </span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1679,7 +1823,15 @@ export default function App() {
             {estimate.length === 0 ? (
               <div className="p-12 text-center text-muted-foreground">
                 <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-40" />
-                <p>لم تُضَف بنود بعد. ابدأ بالبحث ثم اضغط زر الإضافة (+).</p>
+                <p className="mb-4">
+                  لم تُضَف بنود بعد. اضغط على «إضافة بند» للبحث في قاعدة البنود أو إدراج بند مستجد.
+                </p>
+                <Button
+                  type="button"
+                  onClick={() => setShowSearchModal(true)}
+                >
+                  <Plus className="w-4 h-4 ml-1.5" /> إضافة بند
+                </Button>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -1695,96 +1847,124 @@ export default function App() {
                       <th className="p-2 text-right w-32">الكمية</th>
                       <th className="p-2 text-right w-24">السعر</th>
                       <th className="p-2 text-right w-28">الإجمالي</th>
-                      <th className="p-2 w-20"></th>
+                      <th className="p-2 w-12"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {estimate.map((x, i) => (
-                      <tr key={x.id} className="border-t align-top">
-                        <td className="p-2">{i + 1}</td>
-                        <td className="p-2 font-mono text-xs">
-                          <span dir="ltr" className="inline-block">{x.code}</span>
-                          {x.custom && (
-                            <div className="text-[10px] text-muted-foreground font-sans">
-                              {SECTION_LABELS[sectionOf(x.code, x.section)]}
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-2 leading-relaxed w-[316px] min-w-[316px]">
-                          {x.desc}
-                        </td>
-                        <td className="p-2">{x.unit}</td>
-                        <td className="p-2">
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-7 w-7"
-                              onClick={() => updateQty(x.id, x.qty - 1)}
-                            >
-                              <Minus className="w-3 h-3" />
-                            </Button>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              value={x.qty}
-                              onChange={(e) =>
-                                updateQty(
-                                  x.id,
-                                  parseFloat(e.target.value) || 0,
-                                )
-                              }
-                              className="h-7 w-16 px-1 text-center"
-                            />
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-7 w-7"
-                              onClick={() => updateQty(x.id, x.qty + 1)}
-                            >
-                              <Plus className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          {x.rate.toLocaleString("ar-EG")}
-                        </td>
-                        <td className="p-2 font-semibold">
-                          {fmt(x.qty * x.rate)}
-                        </td>
-                        <td className="p-2">
-                          <div className="flex items-center">
-                            <div className="flex flex-col">
-                              <button
-                                className="text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
-                                disabled={i === 0}
-                                onClick={() => move(i, -1)}
-                                aria-label="تحريك لأعلى"
-                              >
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                className="text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
-                                disabled={i === estimate.length - 1}
-                                onClick={() => move(i, 1)}
-                                aria-label="تحريك لأسفل"
-                              >
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => removeItem(x.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {groupedEstimate.map((group) => {
+                      const bannerTint =
+                        group.section === "ordinary"
+                          ? "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-600/25 text-emerald-950 dark:text-emerald-200"
+                          : group.section === "sanitary"
+                            ? "bg-sky-50/80 dark:bg-sky-950/30 border-sky-600/25 text-sky-950 dark:text-sky-200"
+                            : "bg-amber-50/80 dark:bg-amber-950/30 border-amber-600/25 text-amber-950 dark:text-amber-200";
+                      const dotColor =
+                        group.section === "ordinary"
+                          ? "bg-emerald-600"
+                          : group.section === "sanitary"
+                            ? "bg-sky-600"
+                            : "bg-amber-600";
+                      return (
+                        <Fragment key={group.section}>
+                          <tr className={`border-t-2 ${bannerTint}`}>
+                            <td colSpan={6} className="px-3 py-2 font-bold text-xs sm:text-sm">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                                <span>
+                                  {group.ordinal}: {group.heading}
+                                </span>
+                                <span className="text-xs font-normal opacity-75">
+                                  ({group.items.length} {group.items.length === 1 ? "بند" : "بنود"})
+                                </span>
+                              </div>
+                            </td>
+                            <td colSpan={2} className="px-3 py-2 text-left text-xs font-bold">
+                              {fmt(group.subtotal)} ج.م
+                            </td>
+                          </tr>
+                          {group.items.map((x) => (
+                            <tr key={x.id} className="border-t align-top hover:bg-muted/20">
+                              <td className="p-2 text-muted-foreground font-medium">
+                                {x.seq}
+                              </td>
+                              <td className="p-2 font-mono text-xs">
+                                <span dir="ltr" className="inline-block">
+                                  {x.code}
+                                </span>
+                                {x.custom && (
+                                  <div className="text-[10px] text-muted-foreground font-sans">
+                                    بند مستجد
+                                  </div>
+                                )}
+                              </td>
+                              <td className="p-2 leading-relaxed w-[316px] min-w-[316px]">
+                                {x.desc}
+                              </td>
+                              <td className="p-2">{x.unit}</td>
+                              <td className="p-2">
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    className="h-7 w-7"
+                                    onClick={() => updateQty(x.id, x.qty - 1)}
+                                  >
+                                    <Minus className="w-3 h-3" />
+                                  </Button>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={x.qty}
+                                    onChange={(e) =>
+                                      updateQty(
+                                        x.id,
+                                        parseFloat(e.target.value) || 0,
+                                      )
+                                    }
+                                    className="h-7 w-16 px-1 text-center"
+                                  />
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    className="h-7 w-7"
+                                    onClick={() => updateQty(x.id, x.qty + 1)}
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </td>
+                              <td className="p-2">
+                                {x.rate.toLocaleString("ar-EG")}
+                              </td>
+                              <td className="p-2 font-semibold">
+                                {fmt(x.qty * x.rate)}
+                              </td>
+                              <td className="p-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:text-destructive"
+                                  onClick={() => removeItem(x.id)}
+                                  aria-label="حذف البند"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t bg-muted/40 font-bold text-xs sm:text-sm">
+                            <td colSpan={6} className="px-3 py-2 text-center">
+                              {group.subtotalLabel}
+                            </td>
+                            <td className="p-2 font-bold">
+                              {fmt(group.subtotal)} ج.م
+                            </td>
+                            <td></td>
+                          </tr>
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 bg-muted/40 font-bold">
@@ -1798,11 +1978,311 @@ export default function App() {
                     </tr>
                   </tfoot>
                 </table>
+                <div className="p-3 border-t bg-muted/20 flex items-center justify-between gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    إجمالي البنود المضافة: {estimate.length}
+                  </span>
+                  <Button
+                    type="button"
+                    onClick={() => setShowSearchModal(true)}
+                  >
+                    <Plus className="w-4 h-4 ml-1.5" /> إضافة بند
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          {/* Summary (Bottom of page, hidden/collapsed by default) */}
+          <Card className="overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowSummary((v) => !v)}
+              className="w-full flex items-center justify-between gap-3 px-4 py-3 text-right hover:bg-muted/30 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="font-semibold text-sm">بيان الإجماليات</span>
+                {!showSummary && (
+                  <span className="text-xs text-muted-foreground">
+                    • الإجمالي العام:{" "}
+                    <strong className="text-primary">{fmt(totals.net)} ج.م</strong>
+                  </span>
+                )}
+              </div>
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                {showSummary ? (
+                  <>
+                    إخفاء <ChevronUp className="w-4 h-4" />
+                  </>
+                ) : (
+                  <>
+                    عرض <ChevronDown className="w-4 h-4" />
+                  </>
+                )}
+              </span>
+            </button>
+
+            {showSummary && (
+              <div className="p-4 pt-2 border-t">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {sections.map((s) => (
+                    <div key={s} className="rounded-lg border p-3">
+                      <div className="text-xs text-muted-foreground">
+                        {SECTION_LABELS[s]}
+                      </div>
+                      <div className="font-bold mt-1">{fmt(totals[s])}</div>
+                    </div>
+                  ))}
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">
+                      {adj.before}
+                    </div>
+                    <div className="font-bold mt-1">{fmt(totals.grand)}</div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">
+                      {adj.short} ({Math.abs(signedPct)}%)
+                    </div>
+                    <div
+                      className={
+                        adjMode === "discount"
+                          ? "font-bold mt-1 text-destructive"
+                          : "font-bold mt-1"
+                      }
+                    >
+                      {fmt(Math.abs(totals.premium))}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border-2 border-primary bg-primary/10 p-3">
+                    <div className="text-xs text-muted-foreground">
+                      الإجمالي العام
+                    </div>
+                    <div className="font-bold mt-1 text-primary">
+                      {fmt(totals.net)} ج.م
+                    </div>
+                  </div>
+                </div>
+
+                <p className="mt-3 text-sm font-semibold leading-relaxed text-center border p-2 rounded bg-muted/20">
+                  {tafqeet(totals.net)}
+                </p>
               </div>
             )}
           </Card>
         </section>
       </main>
+
+      {/* Search & Add Item Modal */}
+      {showSearchModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeSearchModal();
+          }}
+        >
+          <Card className="w-full max-w-4xl bg-card border-2 shadow-2xl p-4 sm:p-6 relative max-h-[90vh] flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary grid place-items-center shrink-0">
+                  <Search className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base sm:text-lg font-bold">
+                      إضافة بند للمقايسة
+                    </h2>
+                    <span className="text-xs bg-primary/10 text-primary font-medium px-2 py-0.5 rounded">
+                      بنود المقايسة: {estimate.length}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    ابحث وأضف أكثر من بند بشكل متتالي، ثم اضغط إغلاق عند الانتهاء
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={showCustom ? "default" : "outline"}
+                  className="h-8 text-xs"
+                  onClick={() => setShowCustom((v) => !v)}
+                >
+                  <PenLine className="w-3.5 h-3.5 ml-1" /> بند مستجد
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={closeSearchModal}
+                  aria-label="إغلاق نافذة البحث"
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3 shrink-0">
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  ref={searchInputRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      if (query) setQuery("");
+                      else closeSearchModal();
+                    }
+                    if (e.key === "Enter" && results[0]) addItem(results[0]);
+                  }}
+                  placeholder="أدخل كود البند أو جزء من منطوق البند"
+                  className="pr-10 h-11"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {(["all", ...sections] as Filter[]).map((f) => (
+                    <Button
+                      key={f}
+                      type="button"
+                      size="sm"
+                      variant={filter === f ? "default" : "outline"}
+                      className="h-7 text-xs"
+                      onClick={() => setFilter(f)}
+                    >
+                      {f === "all" ? "الكل" : SECTION_LABELS[f]}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {items
+                    ? `${results.length} نتيجة • Enter لإضافة أول نتيجة`
+                    : "جارٍ تحميل قاعدة البيانات..."}
+                </p>
+              </div>
+
+              {showCustom && (
+                <CustomItemForm
+                  onAdd={(li) => {
+                    setEstimate((p) => sortEstimateItems([...p, li]));
+                    setShowCustom(false);
+                    toast.success("تمت إضافة البند المستجد");
+                  }}
+                />
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto pl-1 min-h-[220px]">
+              <div className="grid md:grid-cols-2 gap-2.5">
+                {results.map((it) => {
+                  const q = qtyById.get(it.id);
+                  return (
+                    <Card
+                      key={it.id}
+                      className={`p-3 transition-colors ${
+                        q !== undefined
+                          ? "border-primary bg-primary/5"
+                          : "hover:border-primary"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span
+                              dir="ltr"
+                              className="text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded inline-block"
+                            >
+                              {it.code}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {it.part} • ص {it.page}
+                            </span>
+                            {q !== undefined && (
+                              <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded inline-flex items-center gap-1">
+                                <Check className="w-3 h-3" /> مضاف
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm leading-relaxed line-clamp-3">
+                            {it.desc}
+                          </p>
+                          <div className="flex gap-4 mt-2 text-sm">
+                            <span className="text-muted-foreground">
+                              الوحدة:{" "}
+                              <span className="text-foreground">{it.unit}</span>
+                            </span>
+                            <span className="font-semibold text-primary">
+                              {it.rate.toLocaleString("ar-EG")} ج.م
+                            </span>
+                          </div>
+                        </div>
+                        {q !== undefined ? (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              className="h-7 w-7"
+                              onClick={() => updateQty(it.id, q + 1)}
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </Button>
+                            <Input
+                              type="number"
+                              value={q}
+                              onChange={(e) =>
+                                updateQty(
+                                  it.id,
+                                  parseFloat(e.target.value) || 0,
+                                )
+                              }
+                              className="h-7 w-16 text-center px-1"
+                            />
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              className="h-7 w-7"
+                              onClick={() => updateQty(it.id, q - 1)}
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => addItem(it)}
+                          >
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
+                {items && !results.length && (
+                  <p className="md:col-span-2 text-center text-muted-foreground py-8 text-sm">
+                    لا توجد نتائج مطابقة
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t pt-3 shrink-0">
+              <span className="text-xs text-muted-foreground">
+                إجمالي البنود بالمقايسة: <strong>{estimate.length}</strong>
+              </span>
+              <Button type="button" onClick={closeSearchModal}>
+                إغلاق
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

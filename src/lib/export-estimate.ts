@@ -1,5 +1,12 @@
 import ExcelJS from "exceljs";
-import { adjustmentLabels, computeTotals, sectionOf as baseSection, tafqeet, type Section } from "./estimate-utils";
+import {
+  adjustmentLabels,
+  compareItemCodes,
+  computeTotals,
+  sectionOf as baseSection,
+  tafqeet,
+  type Section,
+} from "./estimate-utils";
 
 export type LineItem = {
   id: number;
@@ -147,9 +154,15 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
   const adj = adjustmentLabels(isDiscount ? "discount" : "premium");
 
   const groups = {
-    ordinary: items.filter((i) => baseSection(i.code, i.section) === "ordinary"),
-    sanitary: items.filter((i) => baseSection(i.code, i.section) === "sanitary"),
-    electrical: items.filter((i) => baseSection(i.code, i.section) === "electrical"),
+    ordinary: items
+      .filter((i) => baseSection(i.code, i.section) === "ordinary")
+      .sort((a, b) => compareItemCodes(a.code, b.code)),
+    sanitary: items
+      .filter((i) => baseSection(i.code, i.section) === "sanitary")
+      .sort((a, b) => compareItemCodes(a.code, b.code)),
+    electrical: items
+      .filter((i) => baseSection(i.code, i.section) === "electrical")
+      .sort((a, b) => compareItemCodes(a.code, b.code)),
   };
 
   // Sheet order: cover first, details second. Details is filled first because the cover points at its cells.

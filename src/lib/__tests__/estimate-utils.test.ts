@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { adjustmentLabels, computeTotals, sectionOf, signedPercent, tafqeet } from "../estimate-utils";
+import {
+  adjustmentLabels,
+  compareItemCodes,
+  computeTotals,
+  groupEstimateBySection,
+  sectionOf,
+  signedPercent,
+  sortEstimateItems,
+  tafqeet,
+} from "../estimate-utils";
 
 describe("estimate rules", () => {
   it("classifies codes 5/05 as sanitary, 6/06 as electrical", () => {
@@ -47,5 +56,38 @@ describe("estimate rules", () => {
     expect(tafqeet(2)).toBe("فقط وقدره جنيهان مصريان لا غير");
     expect(tafqeet(5.01)).toBe("فقط وقدره خمسة جنيه مصري وقرش واحد لا غير");
     expect(tafqeet(5.02)).toBe("فقط وقدره خمسة جنيه مصري وقرشان لا غير");
+  });
+  it("compares GEA item codes numerically segment-by-segment with custom codes last", () => {
+    expect(compareItemCodes("01/01/02/04", "01/02/01/01")).toBeLessThan(0);
+    expect(compareItemCodes("01/01/10/01", "01/01/02/09")).toBeGreaterThan(0);
+    expect(compareItemCodes("05/01/02/02", "مستجد")).toBeLessThan(0);
+  });
+  it("sorts and groups estimate items by section (ordinary -> sanitary -> electrical) and code", () => {
+    const raw = [
+      { id: 1, code: "06/02/01/01", qty: 2, rate: 50 },
+      { id: 2, code: "مستجد", qty: 1, rate: 100, section: "ordinary" as const },
+      { id: 3, code: "05/01/02/04", qty: 3, rate: 20 },
+      { id: 4, code: "01/02/01/01", qty: 1, rate: 200 },
+      { id: 5, code: "01/01/02/04", qty: 4, rate: 25 },
+      { id: 6, code: "06/01/01/05", qty: 1, rate: 300 },
+    ];
+    const sorted = sortEstimateItems(raw);
+    expect(sorted.map((x) => x.code)).toEqual([
+      "01/01/02/04",
+      "01/02/01/01",
+      "مستجد",
+      "05/01/02/04",
+      "06/01/01/05",
+      "06/02/01/01",
+    ]);
+
+    const groups = groupEstimateBySection(raw);
+    expect(groups.map((g) => g.section)).toEqual(["ordinary", "sanitary", "electrical"]);
+    expect(groups[0].items.map((x) => x.seq)).toEqual([1, 2, 3]);
+    expect(groups[1].items.map((x) => x.seq)).toEqual([4]);
+    expect(groups[2].items.map((x) => x.seq)).toEqual([5, 6]);
+    expect(groups[0].subtotal).toBe(400);
+    expect(groups[1].subtotal).toBe(60);
+    expect(groups[2].subtotal).toBe(400);
   });
 });

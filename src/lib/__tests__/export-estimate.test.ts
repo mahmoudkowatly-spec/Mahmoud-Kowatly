@@ -119,4 +119,19 @@ describe("estimate workbook", () => {
     const wb = await buildEstimateWorkbook(items, { ...meta, logoDataUrl: "data:image/webp;base64,AAAA" });
     expect(wb.getWorksheet("الغلاف")!.getImages()).toHaveLength(0);
   });
+
+  it("sorts items by section and code in the exported details sheet", async () => {
+    const unordered: LineItem[] = [
+      { id: 1, code: "06/02/01/01", desc: "كهرباء ثاني", unit: "عدد", rate: 100, qty: 1 },
+      { id: 2, code: "01/02/01/01", desc: "اعتيادي ثاني", unit: "م2", rate: 50, qty: 1 },
+      { id: 3, code: "05/01/02/02", desc: "صحي أول", unit: "عدد", rate: 80, qty: 1 },
+      { id: 4, code: "01/01/02/04", desc: "اعتيادي أول", unit: "م3", rate: 200, qty: 1 },
+    ];
+    const wb = await buildEstimateWorkbook(unordered, meta);
+    const det = wb.getWorksheet("تفاصيل البنود")!;
+    expect(det.getCell("F4").value).toBe("01/01/02/04");
+    expect(det.getCell("F5").value).toBe("01/02/01/01");
+    expect(det.getCell("F7").value).toBe("05/01/02/02");
+    expect(det.getCell("F9").value).toBe("06/02/01/01");
+  });
 });
