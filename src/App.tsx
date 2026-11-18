@@ -105,9 +105,6 @@ function normalize(s: string) {
 type Filter = "all" | Section;
 
 export default function App() {
-  const [showCharitableHome, setShowCharitableHome] = useState(
-    () => sessionStorage.getItem("boq_home_seen") !== "1",
-  );
   const [items, setItems] = useState<Item[] | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -611,12 +608,6 @@ export default function App() {
     <div dir="rtl" className="min-h-screen bg-background text-foreground font-sans">
       <Toaster position="top-center" richColors />
       <OfflineIndicator />
-      {showCharitableHome && (
-        <CharitableHome onContinue={() => {
-          sessionStorage.setItem("boq_home_seen", "1");
-          setShowCharitableHome(false);
-        }} />
-      )}
 
       {/* Reusable In-App Confirmation Modal (bypasses iframe sandbox restrictions) */}
       {confirmDialog.isOpen && (
@@ -1854,138 +1845,5 @@ function CustomItemForm({ onAdd }: { onAdd: (li: LineItem) => void }) {
         <Plus className="w-4 h-4 ml-1" /> إضافة للمقايسة
       </Button>
     </div>
-  );
-}
-
-
-function CharitableHome({ onContinue }: { onContinue: () => void }) {
-  const features = [
-    { number: "01", title: "مكتبة بنود منظمة", text: "ابحث في بنود المقايسات وأسعارها، وصنّفها حسب التخصص بسهولة." },
-    { number: "02", title: "إعداد أسرع", text: "أنشئ مقايسة مشروعك، وأضف الكميات والخصومات في مساحة واحدة." },
-    { number: "03", title: "تقارير جاهزة", text: "راجع الإجماليات واطبع المستند أو صدّره إلى Excel وPDF." },
-  ];
-
-  return (
-    <main dir="rtl" lang="ar" className="fixed inset-0 z-[100] h-screen overflow-y-auto bg-[#f5f8fc] text-[#122b45] font-sans">
-      <header className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
-        <a href="#" className="flex items-center gap-3" aria-label="منصة المقايسات">
-          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#112b46] text-white shadow-lg shadow-[#112b46]/15">
-            <FileSpreadsheet className="h-5 w-5" />
-          </span>
-          <span>
-            <span className="block text-base font-extrabold tracking-tight sm:text-lg">منصة المقايسات</span>
-            <span className="block text-[11px] font-medium text-slate-500 sm:text-xs">أدوات هندسية للعمل بثقة</span>
-          </span>
-        </a>
-        <button type="button" onClick={onContinue} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-[#173652] transition hover:border-emerald-600 hover:text-emerald-700">
-          الدخول إلى المنصة <span aria-hidden="true">←</span>
-        </button>
-      </header>
-
-      <section className="relative isolate overflow-hidden border-y border-[#e3ebf2] bg-white">
-        <div aria-hidden="true" className="absolute inset-0 -z-10 opacity-60" style={{ backgroundImage: "radial-gradient(#b9cddd 0.8px, transparent 0.8px)", backgroundSize: "22px 22px" }} />
-        <div aria-hidden="true" className="absolute -left-24 top-0 -z-10 h-72 w-72 rounded-full bg-emerald-100/70 blur-3xl" />
-        <div className="mx-auto grid max-w-7xl items-center gap-12 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-[1.08fr_.92fr] lg:py-28">
-          <div className="max-w-2xl">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800 sm:text-sm">
-              <span className="h-2 w-2 rounded-full bg-emerald-600" />
-              دقة هندسية • وقت أوفر • عمل منظم
-            </div>
-            <h1 className="text-4xl font-black leading-[1.35] tracking-tight text-[#102943] sm:text-5xl lg:text-6xl">
-              مقايساتك الهندسية،<br /><span className="text-emerald-700">بخطوات أوضح.</span>
-            </h1>
-            <p className="mt-6 max-w-xl text-base leading-8 text-slate-600 sm:text-lg">
-              منصة عربية تساعدك على إعداد مقايسات المشروعات ومراجعة البنود والكميات والتكاليف، في تجربة عملية سهلة من البداية حتى التقرير النهائي.
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <button type="button" onClick={onContinue} className="inline-flex items-center justify-center gap-3 rounded-xl bg-[#123653] px-7 py-4 text-base font-extrabold text-white shadow-xl shadow-[#123653]/15 transition hover:-translate-y-0.5 hover:bg-[#0b2942]">
-                ابدأ إعداد مقايسة <span aria-hidden="true">←</span>
-              </button>
-              <a href="#features" className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-7 py-4 text-sm font-bold text-[#173652] transition hover:border-slate-300">
-                تعرّف على المزايا
-              </a>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium text-slate-500">
-              <span className="inline-flex items-center gap-2"><Check className="h-4 w-4 text-emerald-700" /> حفظ مشاريعك على جهازك</span>
-              <span className="inline-flex items-center gap-2"><Check className="h-4 w-4 text-emerald-700" /> تصدير وطباعة سهلة</span>
-            </div>
-          </div>
-
-          <div className="relative mx-auto w-full max-w-lg">
-            <div aria-hidden="true" className="absolute -inset-5 rounded-[2rem] bg-gradient-to-br from-emerald-100 via-transparent to-blue-100 blur-2xl" />
-            <div className="relative overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-2xl shadow-[#183651]/10">
-              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-                <div>
-                  <p className="text-xs font-semibold text-slate-400">معاينة مساحة العمل</p>
-                  <p className="mt-1 font-extrabold text-[#173652]">مقايسة مشروع جديد</p>
-                </div>
-                <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">مسودة</span>
-              </div>
-              <div className="space-y-4 p-5 sm:p-6">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-slate-50 p-3"><p className="text-[11px] text-slate-400">اسم المشروع</p><p className="mt-2 text-sm font-bold text-slate-700">مبنى إداري</p></div>
-                  <div className="rounded-xl bg-slate-50 p-3"><p className="text-[11px] text-slate-400">التخصص</p><p className="mt-2 text-sm font-bold text-slate-700">أعمال مدنية</p></div>
-                </div>
-                <div className="overflow-hidden rounded-xl border border-slate-100">
-                  <div className="grid grid-cols-[1fr_auto_auto] gap-3 bg-[#f2f6f9] px-3 py-2.5 text-[10px] font-bold text-slate-500 sm:px-4">
-                    <span>وصف البند</span><span>الكمية</span><span>السعر</span>
-                  </div>
-                  {[["أعمال الحفر والردم", "١٢٠ م³", "—"], ["خرسانة مسلحة للأساسات", "٤٥ م³", "—"], ["مباني الطوب الأسمنتي", "٨٠ م²", "—"]].map(([name, qty, price]) => (
-                    <div key={name} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-t border-slate-100 px-3 py-3 text-xs sm:px-4">
-                      <span className="font-semibold text-slate-700">{name}</span><span className="text-slate-500">{qty}</span><span className="font-bold text-emerald-700">{price}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between rounded-xl bg-[#112b46] px-4 py-3.5 text-white">
-                  <span className="text-xs font-medium text-blue-100">إجمالي البنود</span>
-                  <span className="text-sm font-extrabold">يُحتسب تلقائياً</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3 text-[11px] font-medium text-slate-500">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" /> مساحة عمل تحفظ مشاريعك محلياً
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="features" className="mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20">
-        <div className="mb-9 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-          <div><p className="text-sm font-bold text-emerald-700">مصممة لعملك اليومي</p><h2 className="mt-2 text-2xl font-black text-[#102943] sm:text-3xl">كل ما تحتاجه في مكان واحد</h2></div>
-          <p className="max-w-md text-sm leading-7 text-slate-500">من تنظيم البنود إلى مراجعة التكاليف وإخراج المستندات، أدوات عملية ضمن مساحة عربية واضحة.</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {features.map((feature) => (
-            <article key={feature.number} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-sm font-black text-emerald-800">{feature.number}</span>
-              <h3 className="mt-5 text-lg font-extrabold text-[#173652]">{feature.title}</h3>
-              <p className="mt-2 text-sm leading-7 text-slate-500">{feature.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-5 pb-14 sm:px-8">
-        <div className="overflow-hidden rounded-[1.75rem] bg-[#112b46] px-6 py-9 text-white sm:px-10 sm:py-12">
-          <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <p className="text-sm font-bold text-emerald-300">وقفٌ من العلم النافع</p>
-              <h2 className="mt-2 text-2xl font-black sm:text-3xl">«عِلمٌ يُنتفع به»</h2>
-              <p className="mt-4 max-w-2xl text-sm leading-8 text-blue-100 sm:text-base">
-                أرجو أن يكون هذا العمل نافعاً، وأن يُكتب أجره لكل من استفاد منه أو أسهم في نشره. نسألكم الدعاء لصاحب هذا العمل ولوالديه بالرحمة والمغفرة والقبول.
-              </p>
-            </div>
-            <div aria-hidden="true" className="grid h-16 w-16 place-items-center rounded-2xl border border-white/15 bg-white/10 text-3xl text-emerald-300">✳</div>
-          </div>
-        </div>
-      </section>
-
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-6 text-xs text-slate-500 sm:px-8 md:flex-row md:items-center md:justify-between">
-          <p>منصة المقايسات الهندسية <span className="mx-2 text-slate-300">•</span> أداة عربية لإعداد تقديرات المشروعات</p>
-          <p className="font-medium">اللهم اغفر له ولوالديه وارحمهما، واجعل هذا العمل علماً نافعاً وصدقةً جارية.</p>
-        </div>
-      </footer>
-    </main>
   );
 }
