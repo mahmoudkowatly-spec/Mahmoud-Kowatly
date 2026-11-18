@@ -38,8 +38,10 @@ import { downloadBlob } from "@/lib/download";
 import {
   adjustmentLabels,
   computeTotals,
+  CUSTOM_ITEM_CODE,
   fmt,
   groupEstimateBySection,
+  normalizeCustomCodes,
   sectionOf,
   SECTION_LABELS,
   signedPercent,
@@ -99,7 +101,7 @@ const STORE_KEY = "gea_projects_v2";
 const OLD_KEY = "gea_estimate_v1";
 
 function newProject(partial: Partial<Project> = {}): Project {
-  return {
+  const p: Project = {
     id: `p${Date.now()}${Math.floor(Math.random() * 1000)}`,
     updatedAt: Date.now(),
     projectName: "",
@@ -112,6 +114,9 @@ function newProject(partial: Partial<Project> = {}): Project {
     estimate: [],
     ...partial,
   };
+  // Imports/backups from before the rename carry the old code "مستجد".
+  p.estimate = normalizeCustomCodes(p.estimate);
+  return p;
 }
 
 function normalize(s: string) {
@@ -225,7 +230,10 @@ export default function App() {
       const raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        list = s.projects || [];
+        list = ((s.projects || []) as Project[]).map((p) => ({
+          ...p,
+          estimate: normalizeCustomCodes(p.estimate || []),
+        }));
         active = s.activeId || "";
       } else {
         const old = localStorage.getItem(OLD_KEY);
@@ -1819,7 +1827,7 @@ export default function App() {
               <div className="p-12 text-center text-muted-foreground">
                 <FileSpreadsheet className="w-12 h-12 mx-auto mb-3 opacity-40" />
                 <p className="mb-4">
-                  لم تُضَف بنود بعد. اضغط على «إضافة بند» للبحث في قاعدة البنود أو إدراج بند مستجد.
+                  لم تُضَف بنود بعد. اضغط على «إضافة بند» للبحث في قاعدة البنود أو إدراج بند خارج القائمة.
                 </p>
                 <Button
                   type="button"
@@ -1888,7 +1896,7 @@ export default function App() {
                                 </span>
                                 {x.custom && (
                                   <div className="text-[10px] text-muted-foreground font-sans">
-                                    بند مستجد • {SECTION_LABELS[sectionOf(x.code, x.section)]}
+                                    بند خارج القائمة • {SECTION_LABELS[sectionOf(x.code, x.section)]}
                                   </div>
                                 )}
                               </td>
@@ -2104,7 +2112,7 @@ export default function App() {
                   className="h-8 text-xs"
                   onClick={() => setShowCustom((v) => !v)}
                 >
-                  <PenLine className="w-3.5 h-3.5 ml-1" /> بند مستجد
+                  <PenLine className="w-3.5 h-3.5 ml-1" /> بند خارج القائمة
                 </Button>
                 <Button
                   type="button"
@@ -2164,7 +2172,7 @@ export default function App() {
                   onAdd={(li) => {
                     setEstimate((p) => sortEstimateItems([...p, li]));
                     setShowCustom(false);
-                    toast.success("تمت إضافة البند المستجد");
+                    toast.success("تمت إضافة بند خارج القائمة");
                   }}
                 />
               )}
@@ -2295,7 +2303,7 @@ function CustomItemForm({ onAdd }: { onAdd: (li: LineItem) => void }) {
       return toast.error("أدخل التوصيف والوحدة والسعر");
     onAdd({
       id: -Date.now(),
-      code: "مستجد",
+      code: CUSTOM_ITEM_CODE,
       desc: desc.trim(),
       unit: unit.trim(),
       rate: r,
@@ -2312,7 +2320,7 @@ function CustomItemForm({ onAdd }: { onAdd: (li: LineItem) => void }) {
       <textarea
         value={desc}
         onChange={(e) => setDesc(e.target.value)}
-        placeholder="توصيف البند المستجد"
+        placeholder="توصيف البند خارج القائمة"
         className="w-full min-h-20 rounded-md border bg-background p-2 text-sm"
       />
       <div className="grid grid-cols-3 gap-2">

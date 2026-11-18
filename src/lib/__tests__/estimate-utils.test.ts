@@ -3,7 +3,9 @@ import {
   adjustmentLabels,
   compareItemCodes,
   computeTotals,
+  CUSTOM_ITEM_CODE,
   groupEstimateBySection,
+  normalizeCustomCodes,
   sectionOf,
   signedPercent,
   sortEstimateItems,
@@ -60,12 +62,21 @@ describe("estimate rules", () => {
   it("compares GEA item codes numerically segment-by-segment with custom codes last", () => {
     expect(compareItemCodes("01/01/02/04", "01/02/01/01")).toBeLessThan(0);
     expect(compareItemCodes("01/01/10/01", "01/01/02/09")).toBeGreaterThan(0);
-    expect(compareItemCodes("05/01/02/02", "مستجد")).toBeLessThan(0);
+    expect(compareItemCodes("05/01/02/02", CUSTOM_ITEM_CODE)).toBeLessThan(0);
+  });
+  it("renames the legacy custom code 'مستجد' and leaves other codes alone", () => {
+    const out = normalizeCustomCodes([
+      { code: "مستجد", id: 1 },
+      { code: " مستجد ", id: 2 },
+      { code: "01/01/02/04", id: 3 },
+      { code: CUSTOM_ITEM_CODE, id: 4 },
+    ]);
+    expect(out.map((x) => x.code)).toEqual([CUSTOM_ITEM_CODE, CUSTOM_ITEM_CODE, "01/01/02/04", CUSTOM_ITEM_CODE]);
   });
   it("sorts and groups estimate items by section (ordinary -> sanitary -> electrical) and code", () => {
     const raw = [
       { id: 1, code: "06/02/01/01", qty: 2, rate: 50 },
-      { id: 2, code: "مستجد", qty: 1, rate: 100, section: "ordinary" as const },
+      { id: 2, code: CUSTOM_ITEM_CODE, qty: 1, rate: 100, section: "ordinary" as const },
       { id: 3, code: "05/01/02/04", qty: 3, rate: 20 },
       { id: 4, code: "01/02/01/01", qty: 1, rate: 200 },
       { id: 5, code: "01/01/02/04", qty: 4, rate: 25 },
@@ -75,7 +86,7 @@ describe("estimate rules", () => {
     expect(sorted.map((x) => x.code)).toEqual([
       "01/01/02/04",
       "01/02/01/01",
-      "مستجد",
+      CUSTOM_ITEM_CODE,
       "05/01/02/04",
       "06/01/01/05",
       "06/02/01/01",

@@ -15,6 +15,18 @@ export function sectionOf(code: string, explicit?: Section): Section {
   return "ordinary";
 }
 
+/** Code stored on items that are not in the price list (بند خارج القائمة). */
+export const CUSTOM_ITEM_CODE = "خارج القائمة";
+/** The name these items had before the rename; saved projects and backups may still carry it. */
+export const LEGACY_CUSTOM_ITEM_CODE = "مستجد";
+
+/** Renames the legacy custom-item code so old saved projects and backups show the current name. */
+export function normalizeCustomCodes<T extends { code: string }>(items: readonly T[]): T[] {
+  return items.map((i) =>
+    i.code?.trim() === LEGACY_CUSTOM_ITEM_CODE ? { ...i, code: CUSTOM_ITEM_CODE } : i,
+  );
+}
+
 export const SECTION_ORDER: readonly Section[] = ["ordinary", "sanitary", "electrical"];
 
 export const SECTION_TITLES: Record<

@@ -5,7 +5,7 @@
 3. **"مضاف" badge** on results already in the estimate, with inline +/− qty controls.
 4. **Keyboard**: Enter = add first result, Esc = clear.
 5. **Estimate table** — serial no., code, full description (wide column on screen, normal width in print), unit, rate, qty (editable), value; delete; move up/down; sort by section.
-6. **Custom items** (بند مستجد) with chosen section.
+6. **Custom items** (بند خارج القائمة) with chosen section.
 7. **Live summary cards** — per-section totals, grand total, discount, net, plus Arabic tafqeet.
 8. **Project metadata** — project name, client, organization, governorate, reference no., discount %, logo upload.
 9. **Multiple saved projects** — new / duplicate / delete / switch; JSON export and import.

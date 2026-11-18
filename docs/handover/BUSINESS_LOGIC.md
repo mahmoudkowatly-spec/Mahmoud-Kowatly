@@ -56,8 +56,8 @@ The Excel export recomputes the same values independently with identical formula
 - Qty editable directly and with +/− buttons; rows can be deleted and moved up/down.
 - "ترتيب حسب القسم" sorts rows ordinary → sanitary → electrical (stable within section).
 - Serial number (م) = row position, recalculated automatically.
-- Custom item ("بند مستجد"): free description, unit, rate, qty (default 1), chosen section;
-  stored with `code: "مستجد"`, `custom: true`, negative id `-Date.now()`.
+- Custom item ("بند خارج القائمة"): free description, unit, rate, qty (default 1), chosen section;
+  stored with `code: "خارج القائمة"` (`CUSTOM_ITEM_CODE`; saved projects and backups that still carry the old code "مستجد" are renamed on load/import), `custom: true`, negative id `-Date.now()`.
 - Rates are copied into the estimate at add time; updating the catalog does not change existing rows.
 
 ## 7. Projects & persistence
