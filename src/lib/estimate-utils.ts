@@ -15,17 +15,18 @@ export function sectionOf(code: string, explicit?: Section): Section {
   return "ordinary";
 }
 
-export type Totals = Record<Section, number> & { grand: number; discount: number; net: number };
+export type Totals = Record<Section, number> & { grand: number; premium: number; net: number };
 
+/** `premiumPercent` is the نسبة العلاوة: it is ADDED to the grand total (net = grand + premium). */
 export function computeTotals(
   items: { code: string; qty: number; rate: number; section?: Section }[],
-  discountPercent: number,
+  premiumPercent: number,
 ): Totals {
   const t = { ordinary: 0, sanitary: 0, electrical: 0 };
   for (const i of items) t[sectionOf(i.code, i.section)] += i.qty * i.rate;
   const grand = t.ordinary + t.sanitary + t.electrical;
-  const discount = grand * ((discountPercent || 0) / 100);
-  return { ...t, grand, discount, net: grand - discount };
+  const premium = grand * ((premiumPercent || 0) / 100);
+  return { ...t, grand, premium, net: grand + premium };
 }
 
 const ONES = ["", "واحد", "اثنان", "ثلاثة", "أربعة", "خمسة", "ستة", "سبعة", "ثمانية", "تسعة", "عشرة",

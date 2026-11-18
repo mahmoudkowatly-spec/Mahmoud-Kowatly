@@ -11,7 +11,7 @@
 - [ ] Enter adds first result; Esc clears.
 - [ ] Adding same item twice → qty 2, "مضاف" badge shown.
 - [ ] Edit qty → value = qty × rate; totals update.
-- [ ] Discount 10% on grand 1,000 → discount 100, net 900; tafqeet "فقط وقدره تسعمائة جنيه مصري لا غير".
+- [ ] Premium (نسبة العلاوة) 10% on grand 1,000 → premium 100, net 1,100; tafqeet "فقط وقدره ألف ومائة جنيه مصري لا غير".
 - [ ] Custom item with section electrical appears in electrical total.
 - [ ] Move up/down, delete, sort by section, serial numbers renumber.
 - [ ] New / duplicate / delete / switch project; reload page → data persists.

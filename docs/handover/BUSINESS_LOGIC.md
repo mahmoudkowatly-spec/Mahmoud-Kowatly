@@ -18,17 +18,20 @@ source Excel price list. Rate is EGP per unit.
 
 Labels: ordinary = أعمال اعتيادية, sanitary = أعمال صحية, electrical = أعمال كهربائية.
 
-## 3. Calculations — `computeTotals(items, discountPercent)`
+## 3. Calculations — `computeTotals(items, premiumPercent)`
+> Updated: the old "discount" is now the **نسبة العلاوة (premium)** and is ADDED to the total.
+> The stored project field is still called `discountPercent` so older saved projects load,
+> but its value is now treated as the premium percent.
 ```
 line value        = qty × rate
 section subtotal  = Σ line value of items in that section
 grand             = ordinary + sanitary + electrical
-discount          = grand × (discountPercent / 100)      (empty/NaN percent → 0)
-net               = grand − discount
+premium           = grand × (premiumPercent / 100)       (empty/NaN percent → 0)
+net               = grand + premium
 ```
 No rounding is applied in calculations; rounding happens only on display
 (`fmt`: ar-EG locale, exactly 2 decimals) and in Excel (`#,##0.00`).
-There are no additions/surcharges — only the single discount percentage.
+There is no discount — only the single premium (علاوة) percentage, which is added.
 The Excel export recomputes the same values independently with identical formulas.
 
 ## 4. Arabic amount in words — `tafqeet(amount)`

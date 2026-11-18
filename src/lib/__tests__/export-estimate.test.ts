@@ -7,7 +7,7 @@ const meta = {
   projectTitle: "مشروع تجريبي",
   governorate: "قنا",
   refNumber: "123",
-  discountPercent: 10,
+  premiumPercent: 10,
 };
 
 const items: LineItem[] = [
@@ -68,7 +68,7 @@ describe("estimate workbook", () => {
     expect(cover.getCell("A12").value).toEqual({ formula: "SUM(A9:A11)", result: 1800 });
     expect(cover.getCell("A13").value).toBeCloseTo(0.1);
     expect(cover.getCell("A14").value).toEqual({ formula: "A12*A13", result: 180 });
-    expect(cover.getCell("A15").value).toEqual({ formula: "A12-A14", result: 1620 });
+    expect(cover.getCell("A15").value).toEqual({ formula: "A12+A14", result: 1980 });
   });
 
   it("gives long descriptions taller rows", async () => {
@@ -84,11 +84,11 @@ describe("estimate workbook", () => {
     const back = new ExcelJS.Workbook();
     await back.xlsx.load(buf);
     const cover = back.getWorksheet("الغلاف")!;
-    expect(cover.getCell("A15").value).toMatchObject({ formula: "A12-A14", result: 1620 });
+    expect(cover.getCell("A15").value).toMatchObject({ formula: "A12+A14", result: 1980 });
   });
 
-  it("handles an empty estimate and a missing discount", async () => {
-    const wb = await buildEstimateWorkbook([], { ...meta, discountPercent: NaN });
+  it("handles an empty estimate and a missing premium", async () => {
+    const wb = await buildEstimateWorkbook([], { ...meta, premiumPercent: NaN });
     const cover = wb.getWorksheet("الغلاف")!;
     // ExcelJS does not keep a cached result of 0; Excel recalculates on open anyway.
     expect(cover.getCell("A12").value).toMatchObject({ formula: "SUM(A9:A11)" });

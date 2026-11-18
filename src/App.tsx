@@ -67,6 +67,8 @@ type Project = {
   orgName: string;
   governorate: string;
   refNumber: string;
+  // Legacy field name, kept so saved projects and backups still load.
+  // It now holds the نسبة العلاوة (premium %), which is ADDED to the total.
   discountPercent: number;
   logoDataUrl: string;
   estimate: LineItem[];
@@ -463,7 +465,7 @@ export default function App() {
         projectTitle: project.projectName,
         governorate: project.governorate,
         refNumber: project.refNumber,
-        discountPercent: project.discountPercent,
+        premiumPercent: project.discountPercent,
         logoDataUrl: project.logoDataUrl || undefined,
       });
       toast.success("تم تصدير ملف Excel بنجاح");
@@ -826,12 +828,12 @@ export default function App() {
                           <td className="border border-black p-2 text-center">{fmt(totals.grand)}</td>
                         </tr>
                         <tr>
-                          <td colSpan={2} className="border border-black p-2 text-center">نسبة الخصم المقدمة من المقاول</td>
+                          <td colSpan={2} className="border border-black p-2 text-center">نسبة العلاوة</td>
                           <td className="border border-black p-2 text-center">{project.discountPercent || 0}%</td>
                         </tr>
                         <tr>
-                          <td colSpan={2} className="border border-black p-2 text-center">إجمالي قيمة الخصم</td>
-                          <td className="border border-black p-2 text-center">{fmt(totals.discount)}</td>
+                          <td colSpan={2} className="border border-black p-2 text-center">إجمالي قيمة العلاوة</td>
+                          <td className="border border-black p-2 text-center">{fmt(totals.premium)}</td>
                         </tr>
                         <tr className="font-bold">
                           <td colSpan={2} className="border border-black p-2 text-center bg-[#d9d9d9]">الإجمالي العام</td>
@@ -977,7 +979,7 @@ export default function App() {
               </tr>
               <tr>
                 <td colSpan={2} style={{ border: "1px solid #000", padding: "8px", textAlign: "center" }}>
-                  نسبة الخصم المقدمة من المقاول
+                  نسبة العلاوة
                 </td>
                 <td style={{ border: "1px solid #000", padding: "8px", textAlign: "center" }}>
                   {project.discountPercent || 0}%
@@ -985,10 +987,10 @@ export default function App() {
               </tr>
               <tr>
                 <td colSpan={2} style={{ border: "1px solid #000", padding: "8px", textAlign: "center" }}>
-                  إجمالي قيمة الخصم
+                  إجمالي قيمة العلاوة
                 </td>
                 <td style={{ border: "1px solid #000", padding: "8px", textAlign: "center" }}>
-                  {fmt(totals.discount)}
+                  {fmt(totals.premium)}
                 </td>
               </tr>
               <tr style={{ fontWeight: "bold" }}>
@@ -1525,7 +1527,7 @@ export default function App() {
               {field("رقم التعريفى", "refNumber", "مثال: 2700290")}
               <div>
                 <label className="text-xs font-semibold mb-1 block">
-                  نسبة الخصم (%)
+                  نسبة العلاوة (%)
                 </label>
                 <Input
                   type="number"
@@ -1594,16 +1596,16 @@ export default function App() {
               ))}
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-muted-foreground">
-                  الإجمالي قبل الخصم
+                  الإجمالي قبل العلاوة
                 </div>
                 <div className="font-bold mt-1">{fmt(totals.grand)}</div>
               </div>
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-muted-foreground">
-                  الخصم ({project.discountPercent || 0}%)
+                  العلاوة ({project.discountPercent || 0}%)
                 </div>
-                <div className="font-bold mt-1 text-destructive">
-                  {fmt(totals.discount)}
+                <div className="font-bold mt-1">
+                  {fmt(totals.premium)}
                 </div>
               </div>
               <div className="rounded-lg border-2 border-primary bg-primary/10 p-3">

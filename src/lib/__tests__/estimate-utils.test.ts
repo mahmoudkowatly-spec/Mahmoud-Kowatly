@@ -10,11 +10,16 @@ describe("estimate rules", () => {
     expect(sectionOf("1-1-2-4")).toBe("ordinary");
     expect(sectionOf("مستجد", "electrical")).toBe("electrical");
   });
-  it("applies discount percent to grand total", () => {
+  it("adds the premium (نسبة العلاوة) percent on top of the grand total", () => {
     const t = computeTotals([{ code: "1", qty: 10, rate: 100 }, { code: "6", qty: 1, rate: 1000 }], 10);
     expect(t.grand).toBe(2000);
-    expect(t.discount).toBe(200);
-    expect(t.net).toBe(1800);
+    expect(t.premium).toBe(200);
+    expect(t.net).toBe(2200);
+  });
+  it("treats an empty premium as zero", () => {
+    const t = computeTotals([{ code: "1", qty: 1, rate: 100 }], NaN);
+    expect(t.premium).toBe(0);
+    expect(t.net).toBe(100);
   });
   it("writes amount in Arabic words", () => {
     expect(tafqeet(1250)).toBe("فقط وقدره ألف ومائتان وخمسون جنيه مصري لا غير");

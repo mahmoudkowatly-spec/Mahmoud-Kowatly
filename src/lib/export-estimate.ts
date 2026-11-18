@@ -16,7 +16,7 @@ export type EstimateMeta = {
   projectTitle: string;
   governorate: string;
   refNumber: string;
-  discountPercent: number;
+  premiumPercent: number; // نسبة العلاوة, added to the grand total
   logoDataUrl?: string; // base64 data URL
 };
 
@@ -141,8 +141,8 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
   wb.views = [{ x: 0, y: 0, width: 20000, height: 15000, firstSheet: 0, activeTab: 0, visibility: "visible" }];
   wb.calcProperties = { fullCalcOnLoad: true }; // make Excel recompute the formulas when the file opens
 
-  const discountPercent = Number.isFinite(meta.discountPercent) ? meta.discountPercent : 0;
-  const totals = computeTotals(items, discountPercent);
+  const premiumPercent = Number.isFinite(meta.premiumPercent) ? meta.premiumPercent : 0;
+  const totals = computeTotals(items, premiumPercent);
 
   const groups = {
     ordinary: items.filter((i) => baseSection(i.code, i.section) === "ordinary"),
@@ -335,20 +335,20 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
 
   const pctRow = r;
   cover.getRow(r).height = 28;
-  setCell(`A${r}`, discountPercent / 100, undefined, { font: { name: "Arial", size: 12, bold: true } });
+  setCell(`A${r}`, premiumPercent / 100, undefined, { font: { name: "Arial", size: 12, bold: true } });
   cover.getCell(`A${r}`).numFmt = "0.00%";
-  cover.mergeCells(`B${r}:C${r}`); setCell(`B${r}`, "نسبة الخصم المقدمة من المقاول");
+  cover.mergeCells(`B${r}:C${r}`); setCell(`B${r}`, "نسبة العلاوة");
   r++;
 
-  const discountRow = r;
+  const premiumRow = r;
   cover.getRow(r).height = 28;
-  setCell(`A${r}`, { formula: `A${grandRow}*A${pctRow}`, result: totals.discount }, undefined, { font: { name: "Arial", size: 12, bold: true } });
+  setCell(`A${r}`, { formula: `A${grandRow}*A${pctRow}`, result: totals.premium }, undefined, { font: { name: "Arial", size: 12, bold: true } });
   cover.getCell(`A${r}`).numFmt = "#,##0.00";
-  cover.mergeCells(`B${r}:C${r}`); setCell(`B${r}`, "إجمالي قيمة الخصم المقدمة من المقاول");
+  cover.mergeCells(`B${r}:C${r}`); setCell(`B${r}`, "إجمالي قيمة العلاوة");
   r++;
 
   cover.getRow(r).height = 34;
-  setCell(`A${r}`, { formula: `A${grandRow}-A${discountRow}`, result: totals.net }, YELLOW, { font: { name: "Arial", size: 14, bold: true } });
+  setCell(`A${r}`, { formula: `A${grandRow}+A${premiumRow}`, result: totals.net }, YELLOW, { font: { name: "Arial", size: 14, bold: true } });
   cover.getCell(`A${r}`).numFmt = "#,##0.00";
   cover.mergeCells(`B${r}:C${r}`); setCell(`B${r}`, "الإجمـــــــــــــالى العـــــــــام", GRAY, { font: { name: "Arial", size: 14, bold: true } });
   r++;
