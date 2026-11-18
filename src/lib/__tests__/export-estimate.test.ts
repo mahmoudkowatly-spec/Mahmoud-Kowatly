@@ -56,15 +56,18 @@ describe("estimate workbook", () => {
     const det = wb.getWorksheet("تفاصيل البنود")!;
     const cover = wb.getWorksheet("الغلاف")!;
 
-    // rows 4,5 ordinary + subtotal 6; row 7 electrical + subtotal 8; grand 9
-    expect(det.getCell("A4").value).toEqual({ formula: "B4*C4", result: 600 });
-    expect(det.getCell("A6").value).toEqual({ formula: "SUM(A4:A5)", result: 800 });
-    expect(det.getCell("A8").value).toEqual({ formula: "SUM(A7:A7)", result: 1000 });
-    expect(det.getCell("A9").value).toEqual({ formula: "A6+A8", result: 1800 });
+    // row 4 banner; rows 5,6 ordinary + subtotal 7; row 8 banner; row 9 electrical + subtotal 10; grand 11
+    expect(det.getCell("A4").value).toBe("أولاً: الأعمال الاعتيادية (2)");
+    expect(det.getCell("A5").value).toEqual({ formula: "B5*C5", result: 600 });
+    expect(det.getCell("A7").value).toEqual({ formula: "SUM(A5:A6)", result: 800 });
+    expect(det.getCell("B7").value).toBe("إجمالي الأعمال الاعتيادية");
+    expect(det.getCell("A8").value).toBe("ثالثاً: الأعمال الكهربائية (1)");
+    expect(det.getCell("A10").value).toEqual({ formula: "SUM(A9:A9)", result: 1000 });
+    expect(det.getCell("A11").value).toEqual({ formula: "A7+A10", result: 1800 });
 
-    expect(cover.getCell("A9").value).toEqual({ formula: "'تفاصيل البنود'!A6", result: 800 });
+    expect(cover.getCell("A9").value).toEqual({ formula: "'تفاصيل البنود'!A7", result: 800 });
     expect(cover.getCell("A10").value).toBe(0); // no sanitary items
-    expect(cover.getCell("A11").value).toEqual({ formula: "'تفاصيل البنود'!A8", result: 1000 });
+    expect(cover.getCell("A11").value).toEqual({ formula: "'تفاصيل البنود'!A10", result: 1000 });
     expect(cover.getCell("A12").value).toEqual({ formula: "SUM(A9:A11)", result: 1800 });
     expect(cover.getCell("A13").value).toBeCloseTo(0.1);
     expect(cover.getCell("A14").value).toEqual({ formula: "A12*A13", result: 180 });
@@ -85,7 +88,7 @@ describe("estimate workbook", () => {
     const long: LineItem[] = [{ ...items[0], desc: "وصف طويل جدا ".repeat(60) }];
     const wb = await buildEstimateWorkbook(long, meta);
     const det = wb.getWorksheet("تفاصيل البنود")!;
-    expect(det.getRow(4).height).toBeGreaterThan(100);
+    expect(det.getRow(5).height).toBeGreaterThan(100); // row 4 is the section banner
   });
 
   it("survives a write/read round trip with formulas intact", async () => {
@@ -129,9 +132,10 @@ describe("estimate workbook", () => {
     ];
     const wb = await buildEstimateWorkbook(unordered, meta);
     const det = wb.getWorksheet("تفاصيل البنود")!;
-    expect(det.getCell("F4").value).toBe("01/01/02/04");
-    expect(det.getCell("F5").value).toBe("01/02/01/01");
-    expect(det.getCell("F7").value).toBe("05/01/02/02");
-    expect(det.getCell("F9").value).toBe("06/02/01/01");
+    // 4 banner, 5-6 ordinary, 7 subtotal, 8 banner, 9 sanitary, 10 subtotal, 11 banner, 12 electrical
+    expect(det.getCell("F5").value).toBe("01/01/02/04");
+    expect(det.getCell("F6").value).toBe("01/02/01/01");
+    expect(det.getCell("F9").value).toBe("05/01/02/02");
+    expect(det.getCell("F12").value).toBe("06/02/01/01");
   });
 });

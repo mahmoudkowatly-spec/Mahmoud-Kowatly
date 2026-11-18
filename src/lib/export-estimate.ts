@@ -4,9 +4,11 @@ import {
   compareItemCodes,
   computeTotals,
   sectionOf as baseSection,
+  SECTION_TITLES,
   tafqeet,
   type Section,
 } from "./estimate-utils";
+import { downloadBlob } from "./download";
 
 export type LineItem = {
   id: number;
@@ -211,8 +213,25 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
   let rowIdx = 4;
   const subtotalRows: Partial<Record<Section, number>> = {};
 
-  const writeSection = (key: Section, label: string, arr: LineItem[], total: number) => {
+  const writeSection = (key: Section, arr: LineItem[], total: number) => {
     if (!arr.length) return;
+    const titles = SECTION_TITLES[key];
+
+    // Section banner, e.g. "أولاً: الأعمال الاعتيادية (3 بنود)"
+    const banner = det.getRow(rowIdx);
+    banner.height = 26;
+    det.mergeCells(rowIdx, 1, rowIdx, 7);
+    banner.getCell(1).value = `${titles.ordinal}: ${titles.heading} (${arr.length})`;
+    for (let i = 1; i <= 7; i++) {
+      const c = banner.getCell(i);
+      c.border = box;
+      c.font = { name: "Arial", size: 12, bold: true };
+      c.alignment = { horizontal: "right", vertical: "middle", readingOrder: "rtl" };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: PEACH } };
+    }
+    rowIdx++;
+
+    const label = titles.subtotalLabel;
     const firstRow = rowIdx;
     for (const it of arr) {
       const row = det.getRow(rowIdx);
@@ -258,9 +277,9 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
     rowIdx++;
   };
 
-  writeSection("ordinary", "اجمالي الاعمال الاعتيادية", groups.ordinary, totals.ordinary);
-  writeSection("sanitary", "اجمالي الاعمال الصحية", groups.sanitary, totals.sanitary);
-  writeSection("electrical", "اجمالي الاعمال الكهربائية", groups.electrical, totals.electrical);
+  writeSection("ordinary", groups.ordinary, totals.ordinary);
+  writeSection("sanitary", groups.sanitary, totals.sanitary);
+  writeSection("electrical", groups.electrical, totals.electrical);
 
   const presentSubtotals = (["ordinary", "sanitary", "electrical"] as Section[])
     .map((k) => subtotalRows[k])
@@ -324,9 +343,9 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
 
   const sheetRef = `'${DETAILS_SHEET}'`;
   const rows: [string, string, Section, number][] = [
-    ["اولا", "اجمالي الاعمال الاعتيادية", "ordinary", totals.ordinary],
-    ["ثانيا", "اجمالي الاعمال الصحية", "sanitary", totals.sanitary],
-    ["ثالثا", "اجمالي الاعمال الكهربائية", "electrical", totals.electrical],
+    [SECTION_TITLES.ordinary.ordinal, SECTION_TITLES.ordinary.subtotalLabel, "ordinary", totals.ordinary],
+    [SECTION_TITLES.sanitary.ordinal, SECTION_TITLES.sanitary.subtotalLabel, "sanitary", totals.sanitary],
+    [SECTION_TITLES.electrical.ordinal, SECTION_TITLES.electrical.subtotalLabel, "electrical", totals.electrical],
   ];
   const firstSummaryRow = 9;
   let r = firstSummaryRow;
@@ -396,10 +415,5 @@ export async function generateEstimateExcelBlob(items: LineItem[], meta: Estimat
 
 export async function exportEstimate(items: LineItem[], meta: EstimateMeta) {
   const blob = await generateEstimateExcelBlob(items, meta);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `مقايسة-${meta.projectTitle || "مشروع"}-${new Date().toISOString().slice(0, 10)}.xlsx`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, `مقايسة-${meta.projectTitle || "مشروع"}-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }

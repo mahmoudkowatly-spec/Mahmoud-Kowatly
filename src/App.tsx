@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { exportEstimate } from "@/lib/export-estimate";
+import { downloadBlob } from "@/lib/download";
 import {
   adjustmentLabels,
   computeTotals,
@@ -455,12 +456,7 @@ export default function App() {
       ],
       { type: "application/json" },
     );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `مقايسة-${project.projectName || "مشروع"}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `مقايسة-${project.projectName || "مشروع"}.json`);
   };
 
   const exportAllBackup = () => {
@@ -474,12 +470,10 @@ export default function App() {
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `نسخة-احتياطية-كل-المقايسات-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(
+      blob,
+      `نسخة-احتياطية-كل-المقايسات-${new Date().toISOString().slice(0, 10)}.json`,
+    );
     toast.success(`تم حفظ نسخة احتياطية تشمل ${projects.length} مقايسة`);
   };
 
@@ -1240,7 +1234,8 @@ export default function App() {
       )}
 
       {/* Hidden Master Printable Area for HTML2Canvas & Print Execution */}
-      <div className="absolute -left-[9999px] top-0 pointer-events-none">
+      {/* `fixed` (not `absolute`) so this off-screen copy never adds a sideways scroll area, which RTL pages otherwise get */}
+      <div aria-hidden="true" className="fixed -left-[9999px] top-0 pointer-events-none">
         <div
           ref={printableAreaRef}
           style={{
