@@ -20,4 +20,10 @@ describe("estimate rules", () => {
     expect(tafqeet(1250)).toBe("فقط وقدره ألف ومائتان وخمسون جنيه مصري لا غير");
     expect(tafqeet(750000.5)).toBe("فقط وقدره سبعمائة وخمسون ألف جنيه مصري وخمسون قرش لا غير");
   });
+  it("uses singular/dual forms for exactly 1 or 2 pounds/piasters", () => {
+    expect(tafqeet(1)).toBe("فقط وقدره جنيه واحد مصري لا غير");
+    expect(tafqeet(2)).toBe("فقط وقدره جنيهان مصريان لا غير");
+    expect(tafqeet(5.01)).toBe("فقط وقدره خمسة جنيه مصري وقرش واحد لا غير");
+    expect(tafqeet(5.02)).toBe("فقط وقدره خمسة جنيه مصري وقرشان لا غير");
+  });
 });

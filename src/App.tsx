@@ -250,7 +250,6 @@ export default function App() {
       if (terms.every((t) => desc.includes(t) || code.includes(t)))
         score += 10 + terms.length;
       if (score > 0) scored.push({ it, score });
-      if (scored.length > 800) break;
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, 100).map((s) => s.it);

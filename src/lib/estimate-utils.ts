@@ -73,13 +73,21 @@ function intToWords(n: number): string {
   return parts.join(" و");
 }
 
+/** Counted noun: exactly 1 -> "جنيه واحد", exactly 2 -> "جنيهان", otherwise "<number> <noun>". */
+function counted(n: number, noun: string, dual: string): string {
+  if (n === 1) return `${noun} واحد`;
+  if (n === 2) return dual;
+  return `${intToWords(n)} ${noun}`;
+}
+
 /** Arabic tafqeet for EGP amounts, e.g. "فقط وقدره ... جنيه مصري و ... قرش لا غير". */
 export function tafqeet(amount: number): string {
   const rounded = Math.round(Math.max(0, amount) * 100) / 100;
   const pounds = Math.floor(rounded);
   const piasters = Math.round((rounded - pounds) * 100);
-  let s = `فقط وقدره ${intToWords(pounds)} جنيه مصري`;
-  if (piasters) s += ` و${intToWords(piasters)} قرش`;
+  let s = `فقط وقدره ${counted(pounds, "جنيه", "جنيهان")}`;
+  s += pounds === 2 ? " مصريان" : " مصري";
+  if (piasters) s += ` و${counted(piasters, "قرش", "قرشان")}`;
   return s + " لا غير";
 }
 
