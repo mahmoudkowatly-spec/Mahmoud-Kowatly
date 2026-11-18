@@ -71,6 +71,16 @@ describe("estimate workbook", () => {
     expect(cover.getCell("A15").value).toEqual({ formula: "A12+A14", result: 1980 });
   });
 
+  it("exports a discount as a subtraction with discount labels", async () => {
+    const wb = await buildEstimateWorkbook(items, { ...meta, premiumPercent: -10 });
+    const cover = wb.getWorksheet("الغلاف")!;
+    expect(cover.getCell("B13").value).toBe("نسبة الخصم");
+    expect(cover.getCell("B14").value).toBe("إجمالي قيمة الخصم");
+    expect(cover.getCell("A13").value).toBeCloseTo(0.1); // shown as a positive percent
+    expect(cover.getCell("A14").value).toEqual({ formula: "A12*A13", result: 180 });
+    expect(cover.getCell("A15").value).toEqual({ formula: "A12-A14", result: 1620 });
+  });
+
   it("gives long descriptions taller rows", async () => {
     const long: LineItem[] = [{ ...items[0], desc: "وصف طويل جدا ".repeat(60) }];
     const wb = await buildEstimateWorkbook(long, meta);

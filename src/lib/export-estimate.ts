@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { computeTotals, sectionOf as baseSection, tafqeet, type Section } from "./estimate-utils";
+import { adjustmentLabels, computeTotals, sectionOf as baseSection, tafqeet, type Section } from "./estimate-utils";
 
 export type LineItem = {
   id: number;
@@ -16,7 +16,7 @@ export type EstimateMeta = {
   projectTitle: string;
   governorate: string;
   refNumber: string;
-  premiumPercent: number; // نسبة العلاوة, added to the grand total
+  premiumPercent: number; // signed: positive = نسبة العلاوة (added), negative = خصم (subtracted)
   logoDataUrl?: string; // base64 data URL
 };
 
@@ -143,6 +143,8 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
 
   const premiumPercent = Number.isFinite(meta.premiumPercent) ? meta.premiumPercent : 0;
   const totals = computeTotals(items, premiumPercent);
+  const isDiscount = premiumPercent < 0;
+  const adj = adjustmentLabels(isDiscount ? "discount" : "premium");
 
   const groups = {
     ordinary: items.filter((i) => baseSection(i.code, i.section) === "ordinary"),
@@ -335,20 +337,21 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
 
   const pctRow = r;
   cover.getRow(r).height = 28;
-  setCell(`A${r}`, premiumPercent / 100, undefined, { font: { name: "Arial", size: 12, bold: true } });
+  // The percent and the amount are shown as positive numbers; the label says whether it is added or subtracted.
+  setCell(`A${r}`, Math.abs(premiumPercent) / 100, undefined, { font: { name: "Arial", size: 12, bold: true } });
   cover.getCell(`A${r}`).numFmt = "0.00%";
-  cover.mergeCells(`B${r}:C${r}`); setCell(`B${r}`, "نسبة العلاوة");
+  cover.mergeCells(`B${r}:C${r}`); setCell(`B${r}`, adj.pct);
   r++;
 
   const premiumRow = r;
   cover.getRow(r).height = 28;
-  setCell(`A${r}`, { formula: `A${grandRow}*A${pctRow}`, result: totals.premium }, undefined, { font: { name: "Arial", size: 12, bold: true } });
+  setCell(`A${r}`, { formula: `A${grandRow}*A${pctRow}`, result: Math.abs(totals.premium) }, undefined, { font: { name: "Arial", size: 12, bold: true } });
   cover.getCell(`A${r}`).numFmt = "#,##0.00";
-  cover.mergeCells(`B${r}:C${r}`); setCell(`B${r}`, "إجمالي قيمة العلاوة");
+  cover.mergeCells(`B${r}:C${r}`); setCell(`B${r}`, adj.value);
   r++;
 
   cover.getRow(r).height = 34;
-  setCell(`A${r}`, { formula: `A${grandRow}+A${premiumRow}`, result: totals.net }, YELLOW, { font: { name: "Arial", size: 14, bold: true } });
+  setCell(`A${r}`, { formula: `A${grandRow}${isDiscount ? "-" : "+"}A${premiumRow}`, result: totals.net }, YELLOW, { font: { name: "Arial", size: 14, bold: true } });
   cover.getCell(`A${r}`).numFmt = "#,##0.00";
   cover.mergeCells(`B${r}:C${r}`); setCell(`B${r}`, "الإجمـــــــــــــالى العـــــــــام", GRAY, { font: { name: "Arial", size: 14, bold: true } });
   r++;

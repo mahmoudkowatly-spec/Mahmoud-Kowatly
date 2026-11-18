@@ -19,9 +19,11 @@ source Excel price list. Rate is EGP per unit.
 Labels: ordinary = أعمال اعتيادية, sanitary = أعمال صحية, electrical = أعمال كهربائية.
 
 ## 3. Calculations — `computeTotals(items, premiumPercent)`
-> Updated: the old "discount" is now the **نسبة العلاوة (premium)** and is ADDED to the total.
-> The stored project field is still called `discountPercent` so older saved projects load,
-> but its value is now treated as the premium percent.
+> Updated: the adjustment is now **نسبة العلاوة (premium, added)** by default, with an optional
+> **خصم (discount, subtracted)** mode chosen with the علاوة / خصم buttons next to the percent field.
+> The stored project field is still called `discountPercent` (the percent magnitude, >= 0) so older
+> saved projects load; the new optional `adjustmentMode` ("premium" | "discount") says how it applies.
+> `computeTotals` receives a signed percent (`signedPercent(percent, mode)`: discount = negative).
 ```
 line value        = qty × rate
 section subtotal  = Σ line value of items in that section

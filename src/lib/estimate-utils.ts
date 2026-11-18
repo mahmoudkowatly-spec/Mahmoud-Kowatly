@@ -15,9 +15,27 @@ export function sectionOf(code: string, explicit?: Section): Section {
   return "ordinary";
 }
 
-export type Totals = Record<Section, number> & { grand: number; premium: number; net: number };
+/** The adjustment on the grand total is either a premium (علاوة, added) or a discount (خصم, subtracted). */
+export type AdjustmentMode = "premium" | "discount";
 
-/** `premiumPercent` is the نسبة العلاوة: it is ADDED to the grand total (net = grand + premium). */
+export function adjustmentLabels(mode: AdjustmentMode) {
+  return mode === "discount"
+    ? { pct: "نسبة الخصم", value: "إجمالي قيمة الخصم", before: "الإجمالي قبل الخصم", short: "الخصم" }
+    : { pct: "نسبة العلاوة", value: "إجمالي قيمة العلاوة", before: "الإجمالي قبل العلاوة", short: "العلاوة" };
+}
+
+/** Turns a percent magnitude + mode into the signed percent that computeTotals expects (discount = negative). */
+export function signedPercent(percent: number, mode: AdjustmentMode = "premium"): number {
+  const magnitude = Number.isFinite(percent) ? Math.abs(percent) : 0;
+  return mode === "discount" ? -magnitude : magnitude;
+}
+
+export type Totals =Record<Section, number> & { grand: number; premium: number; net: number };
+
+/**
+ * `premiumPercent` is the signed adjustment: positive = نسبة العلاوة (added to the grand total),
+ * negative = discount (subtracted). `premium` is signed the same way, so net = grand + premium.
+ */
 export function computeTotals(
   items: { code: string; qty: number; rate: number; section?: Section }[],
   premiumPercent: number,

@@ -35,11 +35,14 @@ import {
 import { toast, Toaster } from "sonner";
 import { exportEstimate } from "@/lib/export-estimate";
 import {
+  adjustmentLabels,
   computeTotals,
   fmt,
   sectionOf,
   SECTION_LABELS,
+  signedPercent,
   tafqeet,
+  type AdjustmentMode,
   type Section,
 } from "@/lib/estimate-utils";
 import { exportElementToPdf } from "@/lib/export-pdf";
@@ -68,8 +71,10 @@ type Project = {
   governorate: string;
   refNumber: string;
   // Legacy field name, kept so saved projects and backups still load.
-  // It now holds the نسبة العلاوة (premium %), which is ADDED to the total.
+  // It holds the percent magnitude (>= 0); `adjustmentMode` says whether it is a
+  // علاوة (added, the default, also for older projects) or a خصم (subtracted).
   discountPercent: number;
+  adjustmentMode?: AdjustmentMode;
   logoDataUrl: string;
   estimate: LineItem[];
 };
@@ -199,6 +204,9 @@ export default function App() {
 
   const project = projects.find((p) => p.id === activeId) ?? newProject();
   const estimate = project.estimate;
+  const adjMode: AdjustmentMode = project.adjustmentMode ?? "premium";
+  const adj = adjustmentLabels(adjMode);
+  const signedPct = signedPercent(project.discountPercent, adjMode);
 
   const update = (
     patch: Partial<Project> | ((p: Project) => Partial<Project>),
@@ -309,7 +317,7 @@ export default function App() {
     );
   };
 
-  const totals = computeTotals(estimate, project.discountPercent);
+  const totals = computeTotals(estimate, signedPct);
 
   // ---- Projects ----
   const createProject = () => {
@@ -465,7 +473,7 @@ export default function App() {
         projectTitle: project.projectName,
         governorate: project.governorate,
         refNumber: project.refNumber,
-        premiumPercent: project.discountPercent,
+        premiumPercent: signedPct,
         logoDataUrl: project.logoDataUrl || undefined,
       });
       toast.success("تم تصدير ملف Excel بنجاح");
@@ -828,12 +836,12 @@ export default function App() {
                           <td className="border border-black p-2 text-center">{fmt(totals.grand)}</td>
                         </tr>
                         <tr>
-                          <td colSpan={2} className="border border-black p-2 text-center">نسبة العلاوة</td>
-                          <td className="border border-black p-2 text-center">{project.discountPercent || 0}%</td>
+                          <td colSpan={2} className="border border-black p-2 text-center">{adj.pct}</td>
+                          <td className="border border-black p-2 text-center">{Math.abs(signedPct)}%</td>
                         </tr>
                         <tr>
-                          <td colSpan={2} className="border border-black p-2 text-center">إجمالي قيمة العلاوة</td>
-                          <td className="border border-black p-2 text-center">{fmt(totals.premium)}</td>
+                          <td colSpan={2} className="border border-black p-2 text-center">{adj.value}</td>
+                          <td className="border border-black p-2 text-center">{fmt(Math.abs(totals.premium))}</td>
                         </tr>
                         <tr className="font-bold">
                           <td colSpan={2} className="border border-black p-2 text-center bg-[#d9d9d9]">الإجمالي العام</td>
@@ -979,18 +987,18 @@ export default function App() {
               </tr>
               <tr>
                 <td colSpan={2} style={{ border: "1px solid #000", padding: "8px", textAlign: "center" }}>
-                  نسبة العلاوة
+                  {adj.pct}
                 </td>
                 <td style={{ border: "1px solid #000", padding: "8px", textAlign: "center" }}>
-                  {project.discountPercent || 0}%
+                  {Math.abs(signedPct)}%
                 </td>
               </tr>
               <tr>
                 <td colSpan={2} style={{ border: "1px solid #000", padding: "8px", textAlign: "center" }}>
-                  إجمالي قيمة العلاوة
+                  {adj.value}
                 </td>
                 <td style={{ border: "1px solid #000", padding: "8px", textAlign: "center" }}>
-                  {fmt(totals.premium)}
+                  {fmt(Math.abs(totals.premium))}
                 </td>
               </tr>
               <tr style={{ fontWeight: "bold" }}>
@@ -1295,7 +1303,10 @@ export default function App() {
               {[...projects]
                 .sort((a, b) => b.updatedAt - a.updatedAt)
                 .map((p) => {
-                  const t = computeTotals(p.estimate, p.discountPercent);
+                  const t = computeTotals(
+                    p.estimate,
+                    signedPercent(p.discountPercent, p.adjustmentMode),
+                  );
                   const active = p.id === activeId;
                   return (
                     <div
@@ -1527,19 +1538,35 @@ export default function App() {
               {field("رقم التعريفى", "refNumber", "مثال: 2700290")}
               <div>
                 <label className="text-xs font-semibold mb-1 block">
-                  نسبة العلاوة (%)
+                  {adj.pct} (%)
                 </label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.0001"
-                  value={project.discountPercent}
-                  onChange={(e) =>
-                    update({
-                      discountPercent: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.0001"
+                    value={project.discountPercent}
+                    onChange={(e) =>
+                      update({
+                        discountPercent: Math.abs(parseFloat(e.target.value)) || 0,
+                      })
+                    }
+                  />
+                  <div className="flex shrink-0 gap-1" role="group" aria-label="نوع التعديل على الإجمالي">
+                    {(["premium", "discount"] as const).map((m) => (
+                      <Button
+                        key={m}
+                        type="button"
+                        size="sm"
+                        variant={adjMode === m ? "default" : "outline"}
+                        aria-pressed={adjMode === m}
+                        onClick={() => update({ adjustmentMode: m })}
+                      >
+                        {adjustmentLabels(m).short}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="sm:col-span-2">
                 <label className="text-xs font-semibold mb-1 block">
@@ -1596,16 +1623,20 @@ export default function App() {
               ))}
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-muted-foreground">
-                  الإجمالي قبل العلاوة
+                  {adj.before}
                 </div>
                 <div className="font-bold mt-1">{fmt(totals.grand)}</div>
               </div>
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-muted-foreground">
-                  العلاوة ({project.discountPercent || 0}%)
+                  {adj.short} ({Math.abs(signedPct)}%)
                 </div>
-                <div className="font-bold mt-1">
-                  {fmt(totals.premium)}
+                <div
+                  className={
+                    adjMode === "discount" ? "font-bold mt-1 text-destructive" : "font-bold mt-1"
+                  }
+                >
+                  {fmt(Math.abs(totals.premium))}
                 </div>
               </div>
               <div className="rounded-lg border-2 border-primary bg-primary/10 p-3">
