@@ -1888,7 +1888,7 @@ export default function App() {
                                 </span>
                                 {x.custom && (
                                   <div className="text-[10px] text-muted-foreground font-sans">
-                                    بند مستجد
+                                    بند مستجد • {SECTION_LABELS[sectionOf(x.code, x.section)]}
                                   </div>
                                 )}
                               </td>
