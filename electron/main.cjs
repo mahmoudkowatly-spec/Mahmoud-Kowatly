@@ -56,6 +56,12 @@ img{max-width:100%;object-fit:contain}
 </html>`;
 }
 
+ipcMain.handle("boq:get-items", async () => {
+  const itemsPath = path.join(app.getAppPath(), "dist", "data", "items.json");
+  const raw = await fs.readFile(itemsPath, "utf8");
+  return JSON.parse(raw);
+});
+
 ipcMain.handle("boq:export-pdf", async (_event, payload) => {
   if (!payload || typeof payload.html !== "string" || typeof payload.fileName !== "string") {
     throw new Error("بيانات ملف PDF غير صالحة");
