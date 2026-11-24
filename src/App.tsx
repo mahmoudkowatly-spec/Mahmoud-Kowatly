@@ -219,9 +219,15 @@ export default function App() {
 
   useEffect(() => {
     setMounted(true);
-    fetch(`${import.meta.env.BASE_URL}data/items.json`)
-      .then((r) => r.json())
-      .then((d: Item[]) => setItems(d))
+    const desktop = window.boqDesktop;
+    const loadItems = desktop?.getItems
+      ? desktop.getItems()
+      : fetch(`${import.meta.env.BASE_URL}data/items.json`).then((r) => {
+          if (!r.ok) throw new Error("تعذر تحميل قاعدة البيانات");
+          return r.json() as Promise<Item[]>;
+        });
+    loadItems
+      .then((d) => setItems(d as Item[]))
       .catch(() => toast.error("فشل تحميل قاعدة البيانات"));
 
     let list: Project[] = [];
