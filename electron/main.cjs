@@ -29,13 +29,25 @@ function createWindow() {
   }
 }
 
-function buildPrintDocument(html) {
+async function buildPrintDocument(html) {
+  let bundledStyles = "";
+  try {
+    const assetsDir = path.join(app.getAppPath(), "dist", "assets");
+    const files = await fs.readdir(assetsDir);
+    const cssFiles = files.filter((file) => file.endsWith(".css"));
+    const css = await Promise.all(cssFiles.map((file) => fs.readFile(path.join(assetsDir, file), "utf8")));
+    bundledStyles = css.map((content) => `<style>${content}</style>`).join("\\n");
+  } catch {
+    // Development mode may not have a production CSS bundle.
+  }
+
   return `<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BOQ Pro</title>
+${bundledStyles}
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;direction:rtl;color:#111;background:#fff}
@@ -78,7 +90,7 @@ ipcMain.handle("boq:export-pdf", async (_event, payload) => {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   try {
-    await pdfWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(buildPrintDocument(payload.html)));
+    await pdfWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(await buildPrintDocument(payload.html)));
     await pdfWindow.webContents.executeJavaScript("document.fonts.ready");
     const buffer = await pdfWindow.webContents.printToPDF({
       pageSize: "A4",
@@ -99,7 +111,7 @@ ipcMain.handle("boq:print", async (_event, payload) => {
     show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
-  await printWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(buildPrintDocument(payload.html)));
+  await printWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(await buildPrintDocument(payload.html)));
   return new Promise((resolve, reject) => {
     printWindow.webContents.print({ silent: false, printBackground: true }, (success, failureReason) => {
       if (!printWindow.isDestroyed()) printWindow.destroy();
