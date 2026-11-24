@@ -1,5 +1,6 @@
 const { spawn } = require("node:child_process");
 const http = require("node:http");
+const path = require("node:path");
 
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const vite = spawn(npm, ["run", "dev", "--", "--host", "127.0.0.1"], { stdio: "inherit", shell: process.platform === "win32" });
@@ -25,7 +26,8 @@ function waitForVite() {
 }
 
 waitForVite().then(() => {
-  electron = spawn(require.resolve("electron/cli.js"), ["."], {
+  const electronCommand = path.join(process.cwd(), "node_modules", ".bin", process.platform === "win32" ? "electron.cmd" : "electron");
+  electron = spawn(electronCommand, ["."], {
     stdio: "inherit",
     env: { ...process.env, BOQ_DESKTOP_DEV: "1" },
     shell: process.platform === "win32"
