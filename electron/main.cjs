@@ -60,7 +60,7 @@ tr,img{break-inside:avoid;page-break-inside:avoid}
 th,td{border:1px solid #222;padding:5px 6px;vertical-align:middle;overflow-wrap:anywhere}
 th{background:#e5e7eb!important;font-weight:700;text-align:center}
 img{max-width:100%;object-fit:contain}
-#capture-root>div>div:last-child{break-before:page;page-break-before:always;margin-top:0!important}
+#capture-root>div:last-child{break-before:page;page-break-before:always;margin-top:0!important}
 @page{size:A4 portrait;margin:12mm 10mm 16mm}
 </style>
 </head>
