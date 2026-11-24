@@ -69,9 +69,13 @@ img{max-width:100%;object-fit:contain}
 }
 
 ipcMain.handle("boq:get-items", async () => {
-  const itemsPath = path.join(app.getAppPath(), "dist", "data", "items.json");
+  const itemsPath = app.isPackaged
+    ? path.join(app.getAppPath(), "dist", "data", "items.json")
+    : path.join(__dirname, "..", "public", "data", "items.json");
   const raw = await fs.readFile(itemsPath, "utf8");
-  return JSON.parse(raw);
+  const items = JSON.parse(raw);
+  if (!Array.isArray(items)) throw new Error("قاعدة الأسعار غير صالحة");
+  return items;
 });
 
 ipcMain.handle("boq:export-pdf", async (_event, payload) => {
