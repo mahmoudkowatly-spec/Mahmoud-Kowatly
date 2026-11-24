@@ -99,6 +99,7 @@ type ProjectDetailsDraft = Pick<
 
 const STORE_KEY = "gea_projects_v2";
 const OLD_KEY = "gea_estimate_v1";
+const FIRST_PROJECT_KEY = "gea_first_project_created_v1";
 
 function newProject(partial: Partial<Project> = {}): Project {
   const p: Project = {
@@ -414,9 +415,22 @@ export default function App() {
         ...projectModal.draft,
         discountPercent: Math.abs(Number(projectModal.draft.discountPercent)) || 0,
       });
-      setProjects((l) => [p, ...l]);
+      setProjects((l) => [
+        p,
+        ...l.filter((existing) =>
+          Boolean(
+            existing.projectName.trim() ||
+              existing.estimate.length ||
+              existing.orgName.trim() ||
+              existing.clientName.trim() ||
+              existing.governorate.trim() ||
+              existing.refNumber.trim(),
+          ),
+        ),
+      ]);
       setActiveId(p.id);
-      setShowProjects(false);
+      localStorage.setItem(FIRST_PROJECT_KEY, "1");
+      setShowProjects(true);
       setProjectModal((prev) => ({ ...prev, isOpen: false }));
       toast.success("تم إنشاء مقايسة جديدة");
     } else {
@@ -707,7 +721,25 @@ export default function App() {
       <>
         <Toaster position="top-center" richColors />
         <OfflineIndicator />
-        <WelcomeScreen onEnter={() => setShowWelcome(false)} />
+        <WelcomeScreen
+          onEnter={() => {
+            setShowWelcome(false);
+            const hasCreatedProject =
+              localStorage.getItem(FIRST_PROJECT_KEY) === "1" ||
+              projects.some((saved) =>
+                Boolean(
+                  saved.projectName.trim() ||
+                    saved.estimate.length ||
+                    saved.orgName.trim() ||
+                    saved.clientName.trim() ||
+                    saved.governorate.trim() ||
+                    saved.refNumber.trim(),
+                ),
+              );
+            if (hasCreatedProject) setShowProjects(true);
+            else openCreateProjectModal();
+          }}
+        />
       </>
     );
   }
