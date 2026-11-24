@@ -73,14 +73,11 @@ export async function exportElementToPdf(
     }
     th { background: #e5e7eb !important; font-weight: 700; text-align: center; }
     img { max-width: 100%; object-fit: contain; }
-    #capture-root > div:last-child {
+    /* The detailed items block follows the cover summary in the printable DOM. */
+    #capture-root > div > div:last-child {
       break-before: page;
       page-break-before: always;
       margin-top: 0 !important;
-    }
-    #capture-root > div:nth-last-child(2) {
-      break-inside: avoid;
-      page-break-inside: avoid;
     }
     @page {
       size: A4 portrait;
