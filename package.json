@@ -48,19 +48,17 @@
   "main": "electron/main.cjs",
   "build": {
     "appId": "com.mahmoudkowatly.boqpro",
-    "productName": "BOQ Pro Desktop",
+    "productName": "BOQ Pro",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "build/**/*",
       "package.json"
     ],
     "asar": true,
     "win": {
-      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -69,18 +67,14 @@
           ]
         }
       ],
-      "artifactName": "BOQ-Pro-Desktop-Setup-${version}.${ext}"
+      "artifactName": "BOQ-Pro-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "BOQ Pro Desktop",
-      "artifactName": "BOQ-Pro-Desktop-Setup-${version}.${ext}"
-    },
-    "portable": {
-      "artifactName": "BOQ-Pro-Desktop-Portable.${ext}"
+      "shortcutName": "BOQ Pro"
     }
   }
 }
