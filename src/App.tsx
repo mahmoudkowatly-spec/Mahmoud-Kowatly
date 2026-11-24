@@ -589,7 +589,7 @@ export default function App() {
     try {
       const fileName = `مقايسة-${project.projectName || "مشروع"}-${new Date().toISOString().slice(0, 10)}.pdf`;
       await exportElementToPdf(element, fileName);
-      toast.info("تم فتح نافذة الطباعة. اختر «حفظ كملف PDF» لإتمام التصدير.", { id: toastId });
+      toast.success("تم تحميل ملف PDF باسم المقايسة بنجاح", { id: toastId });
     } catch (err: any) {
       console.error("PDF export error:", err);
       toast.error("فشل إنشاء ملف PDF: " + (err.message || "حدث خطأ غير متوقع"), { id: toastId });
