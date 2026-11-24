@@ -99,6 +99,7 @@ type ProjectDetailsDraft = Pick<
 
 const STORE_KEY = "gea_projects_v2";
 const OLD_KEY = "gea_estimate_v1";
+const FIRST_PROJECT_KEY = "gea_first_project_created_v1";
 
 function newProject(partial: Partial<Project> = {}): Project {
   const p: Project = {
@@ -219,9 +220,15 @@ export default function App() {
 
   useEffect(() => {
     setMounted(true);
-    fetch(`${import.meta.env.BASE_URL}data/items.json`)
-      .then((r) => r.json())
-      .then((d: Item[]) => setItems(d))
+    const desktop = window.boqDesktop;
+    const loadItems = desktop?.getItems
+      ? desktop.getItems()
+      : fetch(`${import.meta.env.BASE_URL}data/items.json`).then((r) => {
+          if (!r.ok) throw new Error("تعذر تحميل قاعدة البيانات");
+          return r.json() as Promise<Item[]>;
+        });
+    loadItems
+      .then((d) => setItems(d as Item[]))
       .catch(() => toast.error("فشل تحميل قاعدة البيانات"));
 
     let list: Project[] = [];
@@ -408,9 +415,22 @@ export default function App() {
         ...projectModal.draft,
         discountPercent: Math.abs(Number(projectModal.draft.discountPercent)) || 0,
       });
-      setProjects((l) => [p, ...l]);
+      setProjects((l) => [
+        p,
+        ...l.filter((existing) =>
+          Boolean(
+            existing.projectName.trim() ||
+              existing.estimate.length ||
+              existing.orgName.trim() ||
+              existing.clientName.trim() ||
+              existing.governorate.trim() ||
+              existing.refNumber.trim(),
+          ),
+        ),
+      ]);
       setActiveId(p.id);
-      setShowProjects(false);
+      localStorage.setItem(FIRST_PROJECT_KEY, "1");
+      setShowProjects(true);
       setProjectModal((prev) => ({ ...prev, isOpen: false }));
       toast.success("تم إنشاء مقايسة جديدة");
     } else {
@@ -588,8 +608,18 @@ export default function App() {
 
     try {
       const fileName = `مقايسة-${project.projectName || "مشروع"}-${new Date().toISOString().slice(0, 10)}.pdf`;
-      await exportElementToPdf(element, fileName);
-      toast.info("تم فتح نافذة الطباعة. اختر «حفظ كملف PDF» لإتمام التصدير.", { id: toastId });
+      const desktop = (window as Window & { boqDesktop?: { exportPdf: (payload: { html: string; fileName: string }) => Promise<{ canceled: boolean }> } }).boqDesktop;
+      if (desktop?.exportPdf) {
+        const result = await desktop.exportPdf({ html: element.innerHTML, fileName });
+        if (result.canceled) {
+          toast.info("تم إلغاء حفظ ملف PDF", { id: toastId });
+        } else {
+          toast.success("تم حفظ ملف PDF بنجاح", { id: toastId });
+        }
+      } else {
+        await exportElementToPdf(element, fileName);
+        toast.info("تم فتح نافذة الطباعة. اختر «حفظ كملف PDF» لإتمام التصدير.", { id: toastId });
+      }
     } catch (err: any) {
       console.error("PDF export error:", err);
       toast.error("فشل إنشاء ملف PDF: " + (err.message || "حدث خطأ غير متوقع"), { id: toastId });
@@ -606,7 +636,15 @@ export default function App() {
     const element = printableAreaRef.current;
     if (!element) return;
 
-    // Use a clean temporary print iframe to bypass iframe sandboxing
+    const desktop = (window as Window & { boqDesktop?: { printHtml: (payload: { html: string }) => Promise<void> } }).boqDesktop;
+    if (desktop?.printHtml) {
+      desktop.printHtml({ html: element.innerHTML }).catch((err) => {
+        toast.error("تعذرت الطباعة: " + (err?.message || "حدث خطأ"));
+      });
+      return;
+    }
+
+    // Browser fallback for the web version.
     try {
       const iframe = document.createElement("iframe");
       iframe.style.position = "fixed";
@@ -683,7 +721,25 @@ export default function App() {
       <>
         <Toaster position="top-center" richColors />
         <OfflineIndicator />
-        <WelcomeScreen onEnter={() => setShowWelcome(false)} />
+        <WelcomeScreen
+          onEnter={() => {
+            setShowWelcome(false);
+            const hasCreatedProject =
+              localStorage.getItem(FIRST_PROJECT_KEY) === "1" ||
+              projects.some((saved) =>
+                Boolean(
+                  saved.projectName.trim() ||
+                    saved.estimate.length ||
+                    saved.orgName.trim() ||
+                    saved.clientName.trim() ||
+                    saved.governorate.trim() ||
+                    saved.refNumber.trim(),
+                ),
+              );
+            if (hasCreatedProject) setShowProjects(true);
+            else openCreateProjectModal();
+          }}
+        />
       </>
     );
   }
@@ -1441,17 +1497,11 @@ export default function App() {
                   </Fragment>
                 ))}
               </tbody>
-              <tfoot>
-                <tr style={{ backgroundColor: "#d9d9d9", fontWeight: "bold", fontSize: "12px" }}>
-                  <td colSpan={6} style={{ border: "1px solid #000", padding: "8px", textAlign: "left" }}>
-                    الإجمالي الكلي
-                  </td>
-                  <td style={{ border: "1px solid #000", padding: "8px", textAlign: "center", backgroundColor: "#ffff00" }}>
-                    {fmt(totals.grand)}
-                  </td>
-                </tr>
-              </tfoot>
             </table>
+            <div style={{ breakInside: "avoid", pageBreakInside: "avoid", marginTop: "8px", border: "1px solid #000", backgroundColor: "#d9d9d9", fontWeight: "bold", fontSize: "12px", display: "flex", justifyContent: "space-between", padding: "8px" }}>
+              <span>الإجمالي الكلي</span>
+              <span style={{ backgroundColor: "#ffff00", padding: "2px 8px" }}>{fmt(totals.grand)} ج.م</span>
+            </div>
           </div>
         </div>
       </div>

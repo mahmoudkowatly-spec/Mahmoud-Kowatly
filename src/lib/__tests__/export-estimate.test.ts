@@ -58,16 +58,16 @@ describe("estimate workbook", () => {
 
     // row 4 banner; rows 5,6 ordinary + subtotal 7; row 8 banner; row 9 electrical + subtotal 10; grand 11
     expect(det.getCell("A4").value).toBe("أولاً: الأعمال الاعتيادية (2)");
-    expect(det.getCell("A5").value).toEqual({ formula: "B5*C5", result: 600 });
-    expect(det.getCell("A7").value).toEqual({ formula: "SUM(A5:A6)", result: 800 });
-    expect(det.getCell("B7").value).toBe("إجمالي الأعمال الاعتيادية");
+    expect(det.getCell("G5").value).toEqual({ formula: "F5*E5", result: 600 });
+    expect(det.getCell("G7").value).toEqual({ formula: "SUM(G5:G6)", result: 800 });
+    expect(det.getCell("A7").value).toBe("إجمالي الأعمال الاعتيادية");
     expect(det.getCell("A8").value).toBe("ثالثاً: الأعمال الكهربائية (1)");
-    expect(det.getCell("A10").value).toEqual({ formula: "SUM(A9:A9)", result: 1000 });
-    expect(det.getCell("A11").value).toEqual({ formula: "A7+A10", result: 1800 });
+    expect(det.getCell("G10").value).toEqual({ formula: "SUM(G9:G9)", result: 1000 });
+    expect(det.getCell("G11").value).toEqual({ formula: "G7+G10", result: 1800 });
 
-    expect(cover.getCell("A9").value).toEqual({ formula: "'تفاصيل البنود'!A7", result: 800 });
+    expect(cover.getCell("A9").value).toEqual({ formula: "'تفاصيل البنود'!G7", result: 800 });
     expect(cover.getCell("A10").value).toBe(0); // no sanitary items
-    expect(cover.getCell("A11").value).toEqual({ formula: "'تفاصيل البنود'!A10", result: 1000 });
+    expect(cover.getCell("A11").value).toEqual({ formula: "'تفاصيل البنود'!G10", result: 1000 });
     expect(cover.getCell("A12").value).toEqual({ formula: "SUM(A9:A11)", result: 1800 });
     expect(cover.getCell("A13").value).toBeCloseTo(0.1);
     expect(cover.getCell("A14").value).toEqual({ formula: "A12*A13", result: 180 });
@@ -133,9 +133,9 @@ describe("estimate workbook", () => {
     const wb = await buildEstimateWorkbook(unordered, meta);
     const det = wb.getWorksheet("تفاصيل البنود")!;
     // 4 banner, 5-6 ordinary, 7 subtotal, 8 banner, 9 sanitary, 10 subtotal, 11 banner, 12 electrical
-    expect(det.getCell("F5").value).toBe("01/01/02/04");
-    expect(det.getCell("F6").value).toBe("01/02/01/01");
-    expect(det.getCell("F9").value).toBe("05/01/02/02");
-    expect(det.getCell("F12").value).toBe("06/02/01/01");
+    expect(det.getCell("B5").value).toBe("01/01/02/04");
+    expect(det.getCell("B6").value).toBe("01/02/01/01");
+    expect(det.getCell("B9").value).toBe("05/01/02/02");
+    expect(det.getCell("B12").value).toBe("06/02/01/01");
   });
 });

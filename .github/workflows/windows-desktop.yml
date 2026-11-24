@@ -1,0 +1,39 @@
+name: Windows Desktop Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/windows-desktop-electron
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Verify TypeScript
+        run: npx tsc --noEmit
+      - name: Run tests
+        run: npm test
+      - name: Build Windows installer
+        run: npm run desktop:pack
+      - name: Build Windows portable app
+        run: npm run desktop:portable
+      - name: Upload Windows builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: BOQ-Pro-Windows-Builds
+          path: |
+            release/*.exe
+            release-portable/*.exe
+          if-no-files-found: error

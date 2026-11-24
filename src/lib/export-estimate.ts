@@ -178,14 +178,15 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
   });
 
   // ============ SHEET 2: DETAILS ============
+  // RTL worksheet: A is the rightmost column. Keep the complete table in Arabic reading order.
   det.columns = [
-    { width: 16 }, // A القيمة
-    { width: 12 }, // B الفئة
-    { width: 10 }, // C الكمية
+    { width: 6 },  // A م
+    { width: 14 }, // B رقم البند
+    { width: 60 }, // C بيان الأعمال
     { width: 10 }, // D الوحدة
-    { width: 60 }, // E بيان الأعمال (full desc)
-    { width: 14 }, // F رقم البند
-    { width: 6 },  // G م
+    { width: 10 }, // E الكمية
+    { width: 12 }, // F الفئة
+    { width: 16 }, // G القيمة
   ];
 
   det.getRow(1).height = 34;
@@ -198,7 +199,7 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
     c.border = box;
   }
 
-  const headers = ["القيمة", "الفئة", "كمية", "الوحدة", "بيان الأعمال", "رقم البند", "م"];
+  const headers = ["م", "رقم البند", "بيان الأعمال", "الوحدة", "كمية", "الفئة", "القيمة"];
   det.getRow(3).height = 30;
   headers.forEach((h, i) => {
     const c = det.getRow(3).getCell(i + 1);
@@ -236,21 +237,21 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
     for (const it of arr) {
       const row = det.getRow(rowIdx);
       row.height = rowHeightForText(it.desc);
-      row.getCell(1).value = { formula: `B${rowIdx}*C${rowIdx}`, result: it.qty * it.rate };
-      row.getCell(1).numFmt = "#,##0.00";
-      row.getCell(2).value = it.rate;
-      row.getCell(2).numFmt = "#,##0.00";
-      row.getCell(3).value = it.qty;
+      row.getCell(1).value = seq++;
+      row.getCell(2).value = it.code;
+      row.getCell(3).value = it.desc;
       row.getCell(4).value = it.unit;
-      row.getCell(5).value = it.desc;
-      row.getCell(6).value = it.code;
-      row.getCell(7).value = seq++;
+      row.getCell(5).value = it.qty;
+      row.getCell(6).value = it.rate;
+      row.getCell(6).numFmt = "#,##0.00";
+      row.getCell(7).value = { formula: `F${rowIdx}*E${rowIdx}`, result: it.qty * it.rate };
+      row.getCell(7).numFmt = "#,##0.00";
       for (let i = 1; i <= 7; i++) {
         const c = row.getCell(i);
         c.border = box;
         c.font = { name: "Arial", size: 10, bold: i === 1 };
         c.alignment = {
-          horizontal: i === 5 ? "right" : "center",
+          horizontal: i === 3 ? "right" : "center",
           vertical: "middle",
           wrapText: true,
           readingOrder: "rtl",
@@ -262,10 +263,10 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
 
     const sub = det.getRow(rowIdx);
     sub.height = 32;
-    sub.getCell(1).value = { formula: `SUM(A${firstRow}:A${lastRow})`, result: total };
-    sub.getCell(1).numFmt = "#,##0.00";
-    det.mergeCells(rowIdx, 2, rowIdx, 7);
-    sub.getCell(2).value = label;
+    sub.getCell(7).value = { formula: `SUM(G${firstRow}:G${lastRow})`, result: total };
+    sub.getCell(7).numFmt = "#,##0.00";
+    det.mergeCells(rowIdx, 1, rowIdx, 6);
+    sub.getCell(1).value = label;
     for (let i = 1; i <= 7; i++) {
       const c = sub.getCell(i);
       c.border = box;
@@ -287,12 +288,12 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
 
   const gt = det.getRow(rowIdx);
   gt.height = 36;
-  gt.getCell(1).value = presentSubtotals.length
-    ? { formula: presentSubtotals.map((r) => `A${r}`).join("+"), result: totals.grand }
+  gt.getCell(7).value = presentSubtotals.length
+    ? { formula: presentSubtotals.map((r) => `G${r}`).join("+"), result: totals.grand }
     : 0;
-  gt.getCell(1).numFmt = "#,##0.00";
-  det.mergeCells(rowIdx, 2, rowIdx, 7);
-  gt.getCell(2).value = "الإجمــــــــــــالى";
+  gt.getCell(7).numFmt = "#,##0.00";
+  det.mergeCells(rowIdx, 1, rowIdx, 6);
+  gt.getCell(1).value = "الإجمــــــــــــالى";
   for (let i = 1; i <= 7; i++) {
     const c = gt.getCell(i);
     c.border = box;
@@ -352,7 +353,7 @@ export async function buildEstimateWorkbook(items: LineItem[], meta: EstimateMet
   for (const [ord, label, key, val] of rows) {
     cover.getRow(r).height = 30;
     const subRow = subtotalRows[key];
-    setCell(`A${r}`, subRow ? { formula: `${sheetRef}!A${subRow}`, result: val } : 0, undefined, { font: { name: "Arial", size: 12, bold: true }, alignment: { horizontal: "center", vertical: "middle" } });
+    setCell(`A${r}`, subRow ? { formula: `${sheetRef}!G${subRow}`, result: val } : 0, undefined, { font: { name: "Arial", size: 12, bold: true }, alignment: { horizontal: "center", vertical: "middle" } });
     cover.getCell(`A${r}`).numFmt = "#,##0.00";
     setCell(`B${r}`, label);
     setCell(`C${r}`, ord);
